@@ -1,0 +1,28 @@
+# Exclude old desktop-app directory
+desktop-app/
+
+# Node modules
+node_modules/
+
+# Build outputs
+.next/
+build/
+dist/
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
