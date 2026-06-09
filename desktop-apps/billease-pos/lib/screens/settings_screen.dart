@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/receipt_generator.dart';
 import '../database/database_helper.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -60,8 +62,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // Inventory Settings
   bool trackBatchNumbers = false;
   bool trackExpiryDates = false;
+  bool allowNegativeStockSales = false;
   
   bool _hasUnsavedChanges = false;
+  String updateInstallerUrl = '';
+  bool _isUpdating = false;
 
   @override
   void initState() {
@@ -93,6 +98,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       enableLoyaltyPoints = prefs.getBool('enable_loyalty_points') ?? false;
       trackBatchNumbers = prefs.getBool('track_batch_numbers') ?? false;
       trackExpiryDates = prefs.getBool('track_expiry_dates') ?? false;
+      allowNegativeStockSales = prefs.getBool('allow_negative_stock_sales') ?? false;
       loyaltyPointsRate = prefs.getInt('loyalty_points_rate') ?? 1;
       loyaltyRedemptionValue = prefs.getDouble('loyalty_redemption_value') ?? 1.0;
       
@@ -107,6 +113,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       labelShowName = prefs.getBool('label_show_name') ?? true;
       labelShowMrp = prefs.getBool('label_show_mrp') ?? false;
       labelShowShopName = prefs.getBool('label_show_shop_name') ?? false;
+      updateInstallerUrl = prefs.getString('update_installer_url') ?? '';
     });
   }
 
@@ -146,6 +153,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.setBool('enable_loyalty_points', enableLoyaltyPoints);
     await prefs.setBool('track_batch_numbers', trackBatchNumbers);
     await prefs.setBool('track_expiry_dates', trackExpiryDates);
+    await prefs.setBool('allow_negative_stock_sales', allowNegativeStockSales);
     await prefs.setInt('loyalty_points_rate', loyaltyPointsRate);
     await prefs.setDouble('loyalty_redemption_value', loyaltyRedemptionValue);
     
@@ -160,6 +168,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.setBool('label_show_name', labelShowName);
     await prefs.setBool('label_show_mrp', labelShowMrp);
     await prefs.setBool('label_show_shop_name', labelShowShopName);
+    await prefs.setString('update_installer_url', updateInstallerUrl.trim());
     
     setState(() => _hasUnsavedChanges = false);
     
@@ -496,7 +505,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   id: 'taxes',
                   icon: Icons.account_balance_rounded,
                   label: 'Taxes (GST)',
-                  badge: 'Soon',
                 ),
                 _buildCategoryItem(
                   id: 'users',
@@ -512,7 +520,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   id: 'backup',
                   icon: Icons.cloud_upload_rounded,
                   label: 'Backup & Data',
-                  badge: 'Soon',
+                ),
+                _buildCategoryItem(
+                  id: 'import_export',
+                  icon: Icons.swap_horiz_rounded,
+                  label: 'Import / Export',
                 ),
                 _buildCategoryItem(
                   id: 'advanced',
@@ -611,6 +623,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       'taxes': 'Taxes & GST Configuration',
       'users': 'Users & Roles Management',
       'backup': 'Backup & Data Management',
+      'import_export': 'Import / Export Data',
       'advanced': 'Advanced Settings',
     };
     
@@ -671,6 +684,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return _buildReceiptSettings();
       case 'payment':
         return _buildPaymentSettings();
+      case 'taxes':
+        return _buildTaxSettings();
+      case 'backup':
+        return _buildBackupSettings();
+      case 'import_export':
+        return _buildImportExportSettings();
       case 'advanced':
         return _buildAdvancedSettings();
       default:
@@ -1518,6 +1537,228 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  // ============================================================================
+  // IMPORT / EXPORT SETTINGS
+  // ============================================================================
+
+  Widget _buildImportExportSettings() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSettingsCard(
+          title: 'Data Import',
+          icon: Icons.download_rounded,
+          children: [
+            const Text(
+              'Import data from other accounting software or POS systems. Supports Excel (CSV/XLSX), JSON, Tally export, and generic POS formats.',
+              style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 16),
+            _buildImportOptionRow(
+              icon: Icons.point_of_sale,
+              label: 'Sales Data Import',
+              subtitle: 'Invoice number, date, customer, items, tax, payment mode',
+            ),
+            const Divider(height: 24),
+            _buildImportOptionRow(
+              icon: Icons.inventory_2,
+              label: 'Stock Opening Import',
+              subtitle: 'SKU, quantity, purchase rate, batch details',
+            ),
+            const Divider(height: 24),
+            _buildImportOptionRow(
+              icon: Icons.people,
+              label: 'Ledger Opening Balances',
+              subtitle: 'Debtors and creditors opening balances',
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _navigateToImportExport,
+                icon: const Icon(Icons.download_rounded),
+                label: const Text('Open Import Tool'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF3B82F6),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        _buildSettingsCard(
+          title: 'Export for Other Accounting Apps',
+          icon: Icons.upload_rounded,
+          children: [
+            const Text(
+              'Export your BillEase data to formats compatible with other accounting software like Tally, Busy, Zoho Books, QuickBooks, and more.',
+              style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildExportAppChip('Tally ERP/Prime', Icons.account_balance),
+                _buildExportAppChip('Busy Accounting', Icons.business_center),
+                _buildExportAppChip('Zoho Books', Icons.cloud),
+                _buildExportAppChip('QuickBooks', Icons.auto_stories),
+                _buildExportAppChip('Marg ERP', Icons.shopping_bag),
+                _buildExportAppChip('Generic CSV/JSON', Icons.file_copy),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0F9FF),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFBAE6FD)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline, color: Color(0xFF0284C7), size: 20),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Exports include: Sales, Stock/Inventory, and Customers (Debtors)',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF0369A1)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _navigateToImportExport,
+                icon: const Icon(Icons.upload_rounded),
+                label: const Text('Open Export Tool'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF8B5CF6),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        _buildSettingsCard(
+          title: 'Supported Formats',
+          icon: Icons.description_rounded,
+          children: [
+            _buildFormatInfoRow(
+              icon: Icons.table_chart,
+              label: 'CSV',
+              description: 'Comma-separated values, universal compatibility',
+            ),
+            const Divider(height: 16),
+            _buildFormatInfoRow(
+              icon: Icons.grid_on,
+              label: 'Excel (XLSX)',
+              description: 'Microsoft Excel format for easy editing',
+            ),
+            const Divider(height: 16),
+            _buildFormatInfoRow(
+              icon: Icons.data_object,
+              label: 'JSON',
+              description: 'Structured data format for API integrations',
+            ),
+            const Divider(height: 16),
+            _buildFormatInfoRow(
+              icon: Icons.integration_instructions,
+              label: 'Tally XML',
+              description: 'Native Tally import/export format',
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildImportOptionRow({
+    required IconData icon,
+    required String label,
+    required String subtitle,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF0F9FF),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 20, color: const Color(0xFF3B82F6)),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+              Text(subtitle, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildExportAppChip(String label, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: const Color(0xFF64748B)),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFormatInfoRow({
+    required IconData icon,
+    required String label,
+    required String description,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: const Color(0xFF64748B)),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+              Text(description, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _navigateToImportExport() {
+    Navigator.pushNamed(context, '/import_export');
+  }
+
   Widget _buildAdvancedSettings() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1549,10 +1790,895 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 });
               },
             ),
+            const Divider(height: 24),
+            _buildToggleRow(
+              label: 'Allow Negative Stock Sales',
+              subtitle: 'When enabled, items can be sold below zero stock',
+              value: allowNegativeStockSales,
+              onChanged: (v) {
+                setState(() {
+                  allowNegativeStockSales = v;
+                  _markChanged();
+                });
+              },
+            ),
           ],
         ),
       ],
     );
+  }
+
+  // ============================================================================
+  // TAX SETTINGS
+  // ============================================================================
+  
+  List<Map<String, dynamic>> _taxes = [];
+  bool _taxesLoading = true;
+  
+  Future<void> _loadTaxes() async {
+    setState(() => _taxesLoading = true);
+    try {
+      final db = DatabaseHelper.instance;
+      _taxes = await db.getAllTaxes(activeOnly: false);
+    } catch (e) {
+      debugPrint('Error loading taxes: $e');
+    } finally {
+      if (mounted) setState(() => _taxesLoading = false);
+    }
+  }
+
+  Widget _buildTaxSettings() {
+    // Load taxes if not loaded
+    if (_taxesLoading && _taxes.isEmpty) {
+      _loadTaxes();
+    }
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSettingsCard(
+          title: 'Tax Configuration',
+          icon: Icons.receipt_long_rounded,
+          children: [
+            const Text(
+              'Configure GST tax rates for your business. These rates will be available when adding products.',
+              style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () => _showTaxDialog(),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Add Tax Rate'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF3B82F6),
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        _buildSettingsCard(
+          title: 'Tax Rates',
+          icon: Icons.percent_rounded,
+          children: [
+            if (_taxesLoading)
+              const Center(child: CircularProgressIndicator())
+            else if (_taxes.isEmpty)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(20),
+                  child: Text('No tax rates configured', style: TextStyle(color: Color(0xFF64748B))),
+                ),
+              )
+            else
+              ..._taxes.map((tax) => _buildTaxItem(tax)),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTaxItem(Map<String, dynamic> tax) {
+    final isActive = tax['is_active'] == 1;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isActive ? const Color(0xFFF8FAFC) : const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: isActive ? const Color(0xFFE2E8F0) : const Color(0xFFFECACA)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF3B82F6),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              '${(tax['rate'] as num).toStringAsFixed(1)}%',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  tax['name'] ?? '',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    color: isActive ? const Color(0xFF1E293B) : const Color(0xFF9CA3AF),
+                    decoration: isActive ? null : TextDecoration.lineThrough,
+                  ),
+                ),
+                if (tax['description'] != null && tax['description'].toString().isNotEmpty)
+                  Text(
+                    tax['description'],
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isActive ? const Color(0xFF64748B) : const Color(0xFF9CA3AF),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (!isActive)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEE2E2),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text(
+                'Inactive',
+                style: TextStyle(fontSize: 10, color: Color(0xFFDC2626)),
+              ),
+            ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.edit, size: 18, color: Color(0xFF64748B)),
+            onPressed: () => _showTaxDialog(tax: tax),
+            tooltip: 'Edit',
+          ),
+          IconButton(
+            icon: Icon(Icons.delete, size: 18, color: isActive ? Colors.red : const Color(0xFF9CA3AF)),
+            onPressed: isActive ? () => _deleteTax(tax['id']) : null,
+            tooltip: 'Delete',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showTaxDialog({Map<String, dynamic>? tax}) async {
+    final isEdit = tax != null;
+    final nameController = TextEditingController(text: tax?['name']?.toString() ?? '');
+    final rateController = TextEditingController(text: tax?['rate']?.toString() ?? '');
+    final descController = TextEditingController(text: tax?['description']?.toString() ?? '');
+    bool isActive = tax?['is_active'] == 1 || tax == null;
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(isEdit ? 'Edit Tax Rate' : 'Add Tax Rate'),
+          content: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Tax Name *',
+                    hintText: 'e.g., GST 18%',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.label_outline),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: rateController,
+                  decoration: const InputDecoration(
+                    labelText: 'Tax Rate (%) *',
+                    hintText: 'e.g., 18',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.percent),
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: descController,
+                  decoration: const InputDecoration(
+                    labelText: 'Description',
+                    hintText: 'e.g., Standard rate',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.description_outlined),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SwitchListTile(
+                  title: const Text('Active'),
+                  subtitle: const Text('Inactive taxes won\'t appear in product forms'),
+                  value: isActive,
+                  onChanged: (v) => setDialogState(() => isActive = v),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (nameController.text.isEmpty || rateController.text.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please fill required fields')),
+                  );
+                  return;
+                }
+                
+                try {
+                  final db = DatabaseHelper.instance;
+                  final taxData = {
+                    'name': nameController.text,
+                    'rate': double.tryParse(rateController.text) ?? 0,
+                    'description': descController.text,
+                    'is_active': isActive ? 1 : 0,
+                  };
+                  
+                  if (isEdit) {
+                    taxData['id'] = tax['id'];
+                    await db.updateTax(taxData);
+                  } else {
+                    await db.insertTax(taxData);
+                  }
+                  
+                  if (!context.mounted) return;
+                  Navigator.pop(context);
+                  _loadTaxes();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Tax ${isEdit ? 'updated' : 'added'} successfully')),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: $e')),
+                  );
+                }
+              },
+              child: Text(isEdit ? 'Update' : 'Add'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deleteTax(int id) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Tax Rate'),
+        content: const Text('Are you sure you want to delete this tax rate? Products using this rate will not be affected.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirm == true) {
+      try {
+        await DatabaseHelper.instance.deleteTax(id);
+        _loadTaxes();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Tax rate deleted')),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  // ============================================================================
+  // BACKUP & DATA SETTINGS
+  // ============================================================================
+
+  Widget _buildBackupSettings() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSettingsCard(
+          title: 'Database Backup',
+          icon: Icons.backup_rounded,
+          children: [
+            const Text(
+              'Create a backup of your database including all products, customers, sales, and settings.',
+              style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _createBackup,
+                icon: const Icon(Icons.download_rounded),
+                label: const Text('Create Backup'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF16A34A),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        _buildSettingsCard(
+          title: 'Restore Data',
+          icon: Icons.restore_rounded,
+          children: [
+            const Text(
+              'Restore your database from a previous backup file. This will replace all current data.',
+              style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF3C7),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFFCD34D)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Color(0xFFF59E0B), size: 20),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Warning: Restoring will overwrite all current data. Make sure to create a backup first.',
+                      style: TextStyle(fontSize: 12, color: Color(0xFFA16207)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _restoreBackup,
+                icon: const Icon(Icons.upload_rounded),
+                label: const Text('Restore from Backup'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFDC2626),
+                  side: const BorderSide(color: Color(0xFFDC2626)),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        _buildSettingsCard(
+          title: 'App Updates',
+          icon: Icons.system_update_alt_rounded,
+          children: [
+            const Text(
+              'Download the latest installer and start update automatically. Database files are not modified by this action.',
+              style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              initialValue: updateInstallerUrl,
+              decoration: const InputDecoration(
+                labelText: 'Installer URL',
+                hintText: 'https://.../setup.exe',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (v) {
+                updateInstallerUrl = v;
+                _markChanged();
+              },
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _isUpdating ? null : _downloadAndInstallUpdate,
+                icon: _isUpdating
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.download_for_offline_rounded),
+                label: Text(_isUpdating ? 'Downloading Update...' : 'Download & Install Update'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2563EB),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        _buildSettingsCard(
+          title: 'Data Management',
+          icon: Icons.storage_rounded,
+          children: [
+            _buildDataActionRow(
+              icon: Icons.delete_sweep_rounded,
+              label: 'Clear All Sales Data',
+              subtitle: 'Remove all sales and sale items',
+              color: Colors.orange,
+              onPressed: () => _clearData('sales'),
+            ),
+            const Divider(height: 24),
+            _buildDataActionRow(
+              icon: Icons.people_outline_rounded,
+              label: 'Clear All Customers',
+              subtitle: 'Remove all customer records',
+              color: Colors.orange,
+              onPressed: () => _clearData('customers'),
+            ),
+            const Divider(height: 24),
+            _buildDataActionRow(
+              icon: Icons.inventory_2_outlined,
+              label: 'Clear All Products',
+              subtitle: 'Remove all product records',
+              color: Colors.orange,
+              onPressed: () => _clearData('products'),
+            ),
+            const Divider(height: 24),
+            _buildDataActionRow(
+              icon: Icons.warning_rounded,
+              label: 'Reset Entire Database',
+              subtitle: 'Delete all data and start fresh',
+              color: Colors.red,
+              onPressed: _resetDatabase,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _downloadAndInstallUpdate() async {
+    final url = updateInstallerUrl.trim();
+    if (url.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please set installer URL first'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
+    setState(() => _isUpdating = true);
+    try {
+      final uri = Uri.parse(url);
+      final tempDir = await getTemporaryDirectory();
+      final fileName = p.basename(uri.path).isEmpty ? 'billease_update_installer.exe' : p.basename(uri.path);
+      final installerFile = File(p.join(tempDir.path, fileName));
+
+      final client = HttpClient();
+      final request = await client.getUrl(uri);
+      final response = await request.close();
+      if (response.statusCode != 200) {
+        throw Exception('Download failed (${response.statusCode})');
+      }
+
+      final sink = installerFile.openWrite();
+      await response.forEach(sink.add);
+      await sink.close();
+
+      if (Platform.isWindows) {
+        await Process.start(installerFile.path, [], mode: ProcessStartMode.detached);
+      } else if (Platform.isMacOS) {
+        await Process.start('open', [installerFile.path], mode: ProcessStartMode.detached);
+      } else if (Platform.isLinux) {
+        await Process.start('xdg-open', [installerFile.path], mode: ProcessStartMode.detached);
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Installer started. Database remains untouched.'),
+          backgroundColor: Color(0xFF16A34A),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Update failed: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isUpdating = false);
+    }
+  }
+
+  Widget _buildDataActionRow({
+    required IconData icon,
+    required String label,
+    required String subtitle,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 20, color: color),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+              Text(subtitle, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+            ],
+          ),
+        ),
+        TextButton(
+          onPressed: onPressed,
+          style: TextButton.styleFrom(foregroundColor: color),
+          child: const Text('Clear'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _createBackup() async {
+    try {
+      final dbPath = await DatabaseHelper.instance.getDatabasePath();
+      final dbFile = File(dbPath);
+      
+      if (!await dbFile.exists()) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Database file not found'), backgroundColor: Colors.red),
+        );
+        return;
+      }
+      
+      // Create backup in user's documents folder
+      final now = DateTime.now();
+      final timestamp = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
+      
+      String backupPath;
+      if (Platform.isWindows) {
+        final userProfile = Platform.environment['USERPROFILE'] ?? '';
+        final backupDir = Directory('$userProfile\\Documents\\BillEase Backups');
+        if (!await backupDir.exists()) {
+          await backupDir.create(recursive: true);
+        }
+        backupPath = '${backupDir.path}\\billease_backup_$timestamp.db';
+      } else {
+        final docs = await getApplicationDocumentsDirectory();
+        final backupDir = Directory('${docs.path}/BillEase Backups');
+        if (!await backupDir.exists()) {
+          await backupDir.create(recursive: true);
+        }
+        backupPath = '${backupDir.path}/billease_backup_$timestamp.db';
+      }
+      
+      await dbFile.copy(backupPath);
+      
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.green, size: 28),
+              SizedBox(width: 12),
+              Text('Backup Created'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Your database has been backed up successfully.'),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.folder_outlined, size: 18, color: Color(0xFF64748B)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        backupPath,
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+            if (Platform.isWindows)
+              ElevatedButton.icon(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  await Process.run('explorer.exe', ['/select,', backupPath]);
+                },
+                icon: const Icon(Icons.folder_open, size: 18),
+                label: const Text('Open Folder'),
+              ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Backup failed: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<void> _restoreBackup() async {
+    // Show file picker to select backup file
+    try {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Restore Database'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('To restore from a backup:'),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildStepItem(1, 'Close this application'),
+                    _buildStepItem(2, 'Navigate to your backup location'),
+                    _buildStepItem(3, 'Copy the backup .db file'),
+                    _buildStepItem(4, 'Go to app data folder and replace billease_pos.db'),
+                    _buildStepItem(5, 'Restart the application'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Would you like to open the data folder?',
+                style: TextStyle(fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () => Navigator.pop(context, true),
+              icon: const Icon(Icons.folder_open, size: 18),
+              label: const Text('Open Data Folder'),
+            ),
+          ],
+        ),
+      );
+      
+      if (confirm == true) {
+        final dbPath = await DatabaseHelper.instance.getDatabasePath();
+        final dbDir = File(dbPath).parent.path;
+        if (Platform.isWindows) {
+          await Process.run('explorer.exe', [dbDir]);
+        } else if (Platform.isMacOS) {
+          await Process.run('open', [dbDir]);
+        } else if (Platform.isLinux) {
+          await Process.run('xdg-open', [dbDir]);
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Widget _buildStepItem(int number, String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 20,
+            height: 20,
+            decoration: const BoxDecoration(
+              color: Color(0xFF3B82F6),
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                '$number',
+                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 13))),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _clearData(String table) async {
+    final tableNames = {
+      'sales': 'sales and sale items',
+      'customers': 'customers',
+      'products': 'products',
+    };
+    
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+            const SizedBox(width: 8),
+            Text('Clear ${tableNames[table]}?'),
+          ],
+        ),
+        content: Text('This will permanently delete all ${tableNames[table]}. This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            child: const Text('Clear Data'),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirm == true) {
+      try {
+        final db = DatabaseHelper.instance;
+        if (table == 'sales') {
+          await db.clearTable('sale_items');
+          await db.clearTable('sales');
+        } else {
+          await db.clearTable(table);
+        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${tableNames[table]} cleared successfully')),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _resetDatabase() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_rounded, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Reset Database?'),
+          ],
+        ),
+        content: const Text(
+          'This will permanently delete ALL data including products, customers, sales, and settings. '
+          'The app will restart with a fresh database. This action CANNOT be undone!',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Reset Everything'),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirm == true) {
+      // Double confirmation
+      final doubleConfirm = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Are you absolutely sure?'),
+          content: const Text('Type "RESET" to confirm database reset.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('Yes, Reset'),
+            ),
+          ],
+        ),
+      );
+      
+      if (doubleConfirm == true) {
+        try {
+          final dbPath = await DatabaseHelper.instance.getDatabasePath();
+          final dbFile = File(dbPath);
+          if (await dbFile.exists()) {
+            await dbFile.delete();
+          }
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Database reset. Please restart the application.')),
+          );
+        } catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
   }
 
   Widget _buildSettingsCard({

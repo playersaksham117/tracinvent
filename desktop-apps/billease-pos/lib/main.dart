@@ -9,6 +9,7 @@ import 'screens/customer_management_screen.dart';
 import 'screens/products_screen.dart';
 import 'screens/reports_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/data_import_export_screen.dart';
 import 'widgets/app_layout.dart';
 import 'theme/app_theme.dart';
 
@@ -60,6 +61,9 @@ class BillEasePOSApp extends StatelessWidget {
             break;
           case '/reports':
             screen = const ReportsScreen();
+            break;
+          case '/import_export':
+            screen = const DataImportExportScreen();
             break;
           default:
             screen = DashboardScreen();

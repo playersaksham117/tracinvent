@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
 import '../widgets/overview_tab.dart';
+import '../models/account_type.dart';
 import 'budgets_screen.dart';
 import 'analytics_screen.dart';
 import 'reports_screen.dart';
 import 'settings_screen.dart';
-import 'add_transaction_screen.dart';
+import 'quick_expense_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final AccountType accountType;
+  
+  const HomeScreen({
+    super.key,
+    this.accountType = AccountType.individual,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -27,7 +33,13 @@ class _HomeScreenState extends State<HomeScreen> {
   void _onFabPressed() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => const AddTransactionScreen(isExpense: true),
+        builder: (context) => QuickExpenseScreen(
+          accountType: widget.accountType,
+          onSaved: () {
+            // Refresh data when expense is saved
+            setState(() {});
+          },
+        ),
         fullscreenDialog: true,
       ),
     );
@@ -42,6 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
               onPressed: _onFabPressed,
               icon: const Icon(Icons.add),
               label: const Text('Expense'),
+              heroTag: 'addExpenseFab',
             )
           : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,

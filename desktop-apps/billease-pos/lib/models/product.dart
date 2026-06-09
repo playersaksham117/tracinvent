@@ -8,10 +8,13 @@ class Product {
   final String? description;
   final String? category;
   final String? brand;
+  final String? hsnSac;
+  final String? modelVariant;
   final String unit;
   final double price;
   final double cost;
   final double taxRate;
+  final String productType;
   final int stockQuantity;
   final int lowStockThreshold;
   final String? imageUrl;
@@ -30,10 +33,13 @@ class Product {
     this.description,
     this.category,
     this.brand,
+    this.hsnSac,
+    this.modelVariant,
     this.unit = 'piece',
     required this.price,
     this.cost = 0,
     this.taxRate = 0,
+    this.productType = 'product',
     this.stockQuantity = 0,
     this.lowStockThreshold = 10,
     this.imageUrl,
@@ -54,10 +60,13 @@ class Product {
       'description': description,
       'category': category,
       'brand': brand,
+      'hsn_sac': hsnSac,
+      'model_variant': modelVariant,
       'unit': unit,
       'price': price,
       'cost': cost,
       'tax_rate': taxRate,
+      'product_type': productType,
       'stock_quantity': stockQuantity,
       'low_stock_threshold': lowStockThreshold,
       'image_url': imageUrl,
@@ -79,10 +88,13 @@ class Product {
       description: map['description'] as String?,
       category: map['category'] as String?,
       brand: map['brand'] as String?,
+      hsnSac: map['hsn_sac'] as String?,
+      modelVariant: map['model_variant'] as String?,
       unit: map['unit'] as String? ?? 'piece',
       price: (map['price'] as num).toDouble(),
       cost: (map['cost'] as num?)?.toDouble() ?? 0,
       taxRate: (map['tax_rate'] as num?)?.toDouble() ?? 0,
+      productType: map['product_type'] as String? ?? 'product',
       stockQuantity: map['stock_quantity'] as int? ?? 0,
       lowStockThreshold: map['low_stock_threshold'] as int? ?? 10,
       imageUrl: map['image_url'] as String?,
@@ -92,4 +104,6 @@ class Product {
       updatedAt: map['updated_at'] as String,
     );
   }
+
+  bool get isService => productType.toLowerCase() == 'service';
 }

@@ -6,7 +6,6 @@ import '../providers/sync_provider.dart';
 import '../providers/navigation_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/license_provider.dart';
-import '../widgets/feature_gate.dart';
 import 'dashboard_screen.dart';
 import 'inventory_screen.dart';
 import 'warehouses_screen.dart';

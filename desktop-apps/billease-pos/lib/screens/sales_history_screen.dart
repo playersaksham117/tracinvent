@@ -7,6 +7,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path/path.dart' as p;
 
 class SalesHistoryScreen extends StatefulWidget {
   const SalesHistoryScreen({super.key});
@@ -15,7 +17,10 @@ class SalesHistoryScreen extends StatefulWidget {
   _SalesHistoryScreenState createState() => _SalesHistoryScreenState();
 }
 
-class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
+class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  
+  // Sales data
   List<Map<String, dynamic>> sales = [];
   List<Map<String, dynamic>> filteredSales = [];
   List<Map<String, dynamic>> customers = [];
@@ -25,14 +30,45 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   int? selectedCustomerId;
   String? selectedCustomerName;
   DateTimeRange? dateRange;
+  
+  // Quotation data
+  List<Map<String, dynamic>> quotations = [];
+  List<Map<String, dynamic>> filteredQuotations = [];
+  bool isQuotationLoading = true;
+  String quotationSearchQuery = '';
+  String quotationFilterType = 'all'; // all, sale
+  DateTimeRange? quotationDateRange;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) {
+        _loadDataForTab(_tabController.index);
+      }
+    });
     _loadCustomers();
     _loadSales();
   }
-
+  
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+  
+  void _loadDataForTab(int index) {
+    switch (index) {
+      case 0:
+        if (sales.isEmpty) _loadSales();
+        break;
+      case 1:
+        if (quotations.isEmpty) _loadQuotations();
+        break;
+    }
+  }
+  
   Future<void> _loadCustomers() async {
     try {
       final db = DatabaseHelper.instance;
@@ -97,6 +133,316 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
         return DateTime.parse(dateB).compareTo(DateTime.parse(dateA));
       });
     });
+  }
+
+  // ===== QUOTATION METHODS =====
+  Future<void> _loadQuotations() async {
+    setState(() => isQuotationLoading = true);
+    try {
+      final db = DatabaseHelper.instance;
+      quotations = await db.getAllQuotations();
+      _applyQuotationFilters();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading quotations: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => isQuotationLoading = false);
+      }
+    }
+  }
+
+  void _applyQuotationFilters() {
+    setState(() {
+      filteredQuotations = quotations.where((quotation) {
+        final quotationNumber = quotation['quotation_number']?.toString() ?? '';
+        final customerName = quotation['customer_name']?.toString() ?? '';
+        final matchesSearch = quotationSearchQuery.isEmpty ||
+            quotationNumber.toLowerCase().contains(quotationSearchQuery.toLowerCase()) ||
+            customerName.toLowerCase().contains(quotationSearchQuery.toLowerCase());
+
+        final quotationType = quotation['quotation_type']?.toString() ?? '';
+        final matchesType = quotationFilterType == 'all'
+            ? quotationType == 'sale'
+            : quotationType == quotationFilterType;
+
+        final createdAt = quotation['created_at']?.toString();
+        final matchesDate = quotationDateRange == null ||
+            (createdAt != null &&
+                DateTime.parse(createdAt).isAfter(quotationDateRange!.start) &&
+                DateTime.parse(createdAt).isBefore(quotationDateRange!.end.add(const Duration(days: 1))));
+
+        return matchesSearch && matchesType && matchesDate;
+      }).toList();
+
+      filteredQuotations.sort((a, b) {
+        final dateA = a['created_at']?.toString();
+        final dateB = b['created_at']?.toString();
+        if (dateA == null || dateB == null) return 0;
+        return DateTime.parse(dateB).compareTo(DateTime.parse(dateA));
+      });
+    });
+  }
+
+  Future<void> _deleteQuotation(int id) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Confirm Delete'),
+          ],
+        ),
+        content: const Text('Are you sure you want to delete this quotation?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await DatabaseHelper.instance.deleteQuotation(id);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Quotation deleted successfully')),
+        );
+        _loadQuotations();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error deleting quotation: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _viewQuotationDetails(Map<String, dynamic> quotation) async {
+    final items = await DatabaseHelper.instance.getQuotationItems(quotation['id']);
+    
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Quotation: ${quotation['quotation_number'] ?? 'N/A'}'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildDetailRow('Type', 'SALE'),
+              _buildDetailRow('Customer', quotation['customer_name']?.toString() ?? 'N/A'),
+              _buildDetailRow('Date', quotation['created_at'] != null ? DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.parse(quotation['created_at'])) : 'N/A'),
+              _buildDetailRow('Valid Until', quotation['valid_until'] != null ? DateFormat('dd MMM yyyy').format(DateTime.parse(quotation['valid_until'])) : 'N/A'),
+              _buildDetailRow('Status', (quotation['status']?.toString() ?? 'pending').toUpperCase()),
+              const Divider(),
+              const Text('Items:', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              ...items.map((item) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text('${item['product_name'] ?? 'Unknown'} x${item['quantity'] ?? 0} = ₹${(item['total_amount'] ?? 0.0).toStringAsFixed(2)}'),
+              )),
+              const Divider(),
+              _buildDetailRow('Subtotal', '₹${(quotation['subtotal'] ?? 0.0).toStringAsFixed(2)}'),
+              _buildDetailRow('Tax', '₹${(quotation['tax_amount'] ?? 0.0).toStringAsFixed(2)}'),
+              if ((quotation['discount_amount'] ?? 0.0) > 0)
+                _buildDetailRow('Discount', '₹${(quotation['discount_amount'] ?? 0.0).toStringAsFixed(2)}'),
+              _buildDetailRow('Total', '₹${(quotation['total_amount'] ?? 0.0).toStringAsFixed(2)}', isBold: true),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              _generateQuotationPdf(quotation, items);
+            },
+            icon: const Icon(Icons.picture_as_pdf),
+            label: const Text('PDF'),
+          ),
+          if (quotation['status'] == 'pending')
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                _convertQuotation(quotation);
+              },
+              icon: const Icon(Icons.transform),
+              label: const Text('Convert'),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _convertQuotation(Map<String, dynamic> quotation) async {
+    final type = 'Sale';
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Convert to $type'),
+        content: Text('This will convert the quotation to an actual $type transaction. Continue?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            child: const Text('Convert'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await DatabaseHelper.instance.convertQuotationToSale(quotation['id']);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Quotation converted to Sale successfully!')),
+        );
+        _loadQuotations();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error converting quotation: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _generateQuotationPdf(Map<String, dynamic> quotation, List<Map<String, dynamic>> items) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final shopName = prefs.getString('shop_name') ?? 'My Shop';
+      final address = prefs.getString('address') ?? '';
+      final phone = prefs.getString('phone') ?? '';
+      final gstin = prefs.getString('gstin') ?? '';
+      final currencySymbol = prefs.getString('currency_symbol') ?? '₹';
+
+      final fontData = await PdfGoogleFonts.notoSansRegular();
+      final fontBoldData = await PdfGoogleFonts.notoSansBold();
+      final fontItalicData = await PdfGoogleFonts.notoSansItalic();
+      
+      final pdf = pw.Document();
+      final baseStyle = pw.TextStyle(font: fontData);
+      final boldStyle = pw.TextStyle(font: fontBoldData, fontWeight: pw.FontWeight.bold);
+
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(40),
+          build: (pw.Context context) {
+            return pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Center(
+                  child: pw.Column(
+                    children: [
+                      pw.Text(shopName, style: pw.TextStyle(font: fontBoldData, fontSize: 24, fontWeight: pw.FontWeight.bold)),
+                      if (address.isNotEmpty) pw.Text(address, style: pw.TextStyle(font: fontData, fontSize: 10)),
+                      if (phone.isNotEmpty) pw.Text('Phone: $phone', style: pw.TextStyle(font: fontData, fontSize: 10)),
+                      if (gstin.isNotEmpty) pw.Text('GSTIN: $gstin', style: pw.TextStyle(font: fontData, fontSize: 10)),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(height: 20),
+                pw.Divider(),
+                pw.SizedBox(height: 10),
+                pw.Text(
+                  'SALES QUOTATION',
+                  style: pw.TextStyle(font: fontBoldData, fontSize: 16, fontWeight: pw.FontWeight.bold),
+                ),
+                pw.Text('Quotation #: ${quotation['quotation_number']}', style: baseStyle),
+                pw.Text('Date: ${DateFormat('dd-MMM-yyyy').format(DateTime.parse(quotation['created_at']))}', style: baseStyle),
+                if (quotation['valid_until'] != null)
+                  pw.Text('Valid Until: ${DateFormat('dd-MMM-yyyy').format(DateTime.parse(quotation['valid_until']))}', style: baseStyle),
+                pw.SizedBox(height: 20),
+                pw.TableHelper.fromTextArray(
+                  headerStyle: boldStyle,
+                  cellStyle: baseStyle,
+                  headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+                  cellPadding: const pw.EdgeInsets.all(6),
+                  headers: ['Item', 'Qty', 'Rate', 'Amount'],
+                  data: items.map((item) => [
+                    item['product_name'] ?? 'Unknown',
+                    item['quantity'].toString(),
+                    '$currencySymbol${(item['unit_price'] ?? 0.0).toStringAsFixed(2)}',
+                    '$currencySymbol${(item['total_amount'] ?? 0.0).toStringAsFixed(2)}',
+                  ]).toList(),
+                ),
+                pw.SizedBox(height: 20),
+                pw.Container(
+                  alignment: pw.Alignment.centerRight,
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.Text('Subtotal: $currencySymbol${(quotation['subtotal'] ?? 0.0).toStringAsFixed(2)}', style: baseStyle),
+                      pw.Text('Tax: $currencySymbol${(quotation['tax_amount'] ?? 0.0).toStringAsFixed(2)}', style: baseStyle),
+                      pw.SizedBox(height: 5),
+                      pw.Text('Grand Total: $currencySymbol${(quotation['total_amount'] ?? 0.0).toStringAsFixed(2)}', style: boldStyle),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(height: 30),
+                pw.Center(
+                  child: pw.Text('Thank you for your interest!', style: pw.TextStyle(font: fontItalicData, fontStyle: pw.FontStyle.italic)),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+
+      final pdfBytes = await pdf.save();
+      final directory = await getApplicationDocumentsDirectory();
+      final quotationsDir = Directory(p.join(directory.path, 'BillEase', 'Quotations'));
+      if (!await quotationsDir.exists()) {
+        await quotationsDir.create(recursive: true);
+      }
+      
+      final fileName = 'Quotation_${quotation['quotation_number'].toString().replaceAll('/', '-')}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf';
+      final filePath = p.join(quotationsDir.path, fileName);
+      final file = File(filePath);
+      await file.writeAsBytes(pdfBytes);
+      
+      if (Platform.isWindows) {
+        await Process.run('explorer', [filePath]);
+      } else if (Platform.isMacOS) {
+        await Process.run('open', [filePath]);
+      } else if (Platform.isLinux) {
+        await Process.run('xdg-open', [filePath]);
+      }
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('PDF saved: $fileName'), backgroundColor: Colors.green),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error generating PDF: $e'), backgroundColor: Colors.red),
+      );
+    }
   }
 
   Future<void> _deleteSale(int id) async {
@@ -440,26 +786,78 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
       backgroundColor: const Color(0xFFF5F7FA),
       body: Column(
         children: [
-          // Top Filter Bar
-          _buildFilterBar(),
-          
-          // Data Table
-          Expanded(
-            child: isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : filteredSales.isEmpty
-                    ? _buildEmptyState()
-                    : _buildDataTable(),
+          // Tab Bar
+          Container(
+            color: Colors.white,
+            child: TabBar(
+              controller: _tabController,
+              labelColor: const Color(0xFF3B82F6),
+              unselectedLabelColor: const Color(0xFF64748B),
+              indicatorColor: const Color(0xFF3B82F6),
+              indicatorWeight: 3,
+              tabs: const [
+                Tab(
+                  icon: Icon(Icons.point_of_sale),
+                  text: 'Sales',
+                ),
+                Tab(
+                  icon: Icon(Icons.description),
+                  text: 'Quotations',
+                ),
+              ],
+            ),
           ),
           
-          // Bottom Summary Bar
-          _buildSummaryBar(),
+          // Tab Views
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                // Sales Tab
+                _buildSalesTab(),
+                // Quotations Tab
+                _buildQuotationsTab(),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildFilterBar() {
+  Widget _buildSalesTab() {
+    return Column(
+      children: [
+        _buildSalesFilterBar(),
+        Expanded(
+          child: isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : filteredSales.isEmpty
+                  ? _buildEmptyState('No sales found')
+                  : _buildSalesDataTable(),
+        ),
+        _buildSalesSummaryBar(),
+      ],
+    );
+  }
+
+  Widget _buildQuotationsTab() {
+    return Column(
+      children: [
+        _buildQuotationsFilterBar(),
+        Expanded(
+          child: isQuotationLoading
+              ? const Center(child: CircularProgressIndicator())
+              : filteredQuotations.isEmpty
+                  ? _buildEmptyState('No quotations found')
+                  : _buildQuotationsDataTable(),
+        ),
+        _buildQuotationsSummaryBar(),
+      ],
+    );
+  }
+
+  Widget _buildSalesFilterBar() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: const BoxDecoration(
@@ -657,7 +1055,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     );
   }
 
-  Widget _buildDataTable() {
+  Widget _buildSalesDataTable() {
     return Container(
       margin: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -959,7 +1357,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(String message) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -978,9 +1376,9 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
             ),
           ),
           const SizedBox(height: 20),
-          const Text(
-            'No sales records found',
-            style: TextStyle(
+          Text(
+            message,
+            style: const TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,
               color: Color(0xFF1E293B),
@@ -988,7 +1386,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Sales transactions will appear here',
+            'Records will appear here',
             style: TextStyle(
               fontSize: 14,
               color: Color(0xFF64748B),
@@ -999,7 +1397,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     );
   }
 
-  Widget _buildSummaryBar() {
+  Widget _buildSalesSummaryBar() {
     final totalSales = filteredSales.fold<double>(
       0.0,
       (sum, sale) => sum + (sale['total'] as double? ?? 0.0),
@@ -1153,5 +1551,234 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
       setState(() => dateRange = picked);
       _applyFilters();
     }
+  }
+
+  // ===== QUOTATIONS UI =====
+  Widget _buildQuotationsFilterBar() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              SizedBox(
+                width: 240,
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText: 'Search quotation...',
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    isDense: true,
+                  ),
+                  onChanged: (value) {
+                    quotationSearchQuery = value;
+                    _applyQuotationFilters();
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final picked = await showDateRangePicker(
+                    context: context,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime.now(),
+                    initialDateRange: quotationDateRange,
+                  );
+                  if (picked != null) {
+                    setState(() => quotationDateRange = picked);
+                    _applyQuotationFilters();
+                  }
+                },
+                icon: const Icon(Icons.calendar_today, size: 18),
+                label: Text(
+                  quotationDateRange == null
+                      ? 'Date Range'
+                      : '${DateFormat('dd MMM').format(quotationDateRange!.start)} - ${DateFormat('dd MMM').format(quotationDateRange!.end)}',
+                  style: const TextStyle(fontSize: 13),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+              if (quotationDateRange != null) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: () {
+                    setState(() => quotationDateRange = null);
+                    _applyQuotationFilters();
+                  },
+                ),
+              ],
+              const Spacer(),
+              IconButton(
+                onPressed: _loadQuotations,
+                icon: const Icon(Icons.refresh),
+                tooltip: 'Refresh',
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _buildStatusChip('All', quotationFilterType == 'all', null, () {
+                setState(() => quotationFilterType = 'all');
+                _applyQuotationFilters();
+              }),
+              const SizedBox(width: 8),
+              _buildStatusChip('Sales', quotationFilterType == 'sale', const Color(0xFF3B82F6), () {
+                setState(() => quotationFilterType = 'sale');
+                _applyQuotationFilters();
+              }),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuotationsDataTable() {
+    return Container(
+      margin: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Column(
+          children: [
+            Container(
+              color: const Color(0xFFF8FAFC),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              child: const Row(
+                children: [
+                  Expanded(flex: 2, child: Text('Quotation #', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF475569)))),
+                  Expanded(flex: 1, child: Text('Type', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF475569)))),
+                  Expanded(flex: 2, child: Text('Customer', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF475569)))),
+                  Expanded(flex: 2, child: Text('Date', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF475569)))),
+                  Expanded(flex: 1, child: Text('Status', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF475569)))),
+                  Expanded(flex: 1, child: Text('Total', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF475569)), textAlign: TextAlign.right)),
+                  SizedBox(width: 100, child: Text('Actions', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF475569)), textAlign: TextAlign.center)),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                itemCount: filteredQuotations.length,
+                itemBuilder: (context, index) {
+                  final quotation = filteredQuotations[index];
+                  final status = quotation['status']?.toString() ?? 'pending';
+                  final partyName = quotation['customer_name']?.toString() ?? 'N/A';
+                  return InkWell(
+                    onTap: () => _viewQuotationDetails(quotation),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                      decoration: BoxDecoration(
+                        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+                        color: index % 2 == 0 ? Colors.white : const Color(0xFFFAFAFA),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(flex: 2, child: Text(quotation['quotation_number']?.toString() ?? 'N/A', style: const TextStyle(fontWeight: FontWeight.w500))),
+                          Expanded(flex: 1, child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text('Sale', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Color(0xFF3B82F6))),
+                          )),
+                          Expanded(flex: 2, child: Text(partyName)),
+                          Expanded(flex: 2, child: Text(quotation['created_at'] != null ? DateFormat('dd MMM yyyy').format(DateTime.parse(quotation['created_at'])) : 'N/A')),
+                          Expanded(flex: 1, child: _buildQuotationStatusBadge(status)),
+                          Expanded(flex: 1, child: Text('₹${(quotation['total_amount'] ?? 0.0).toStringAsFixed(2)}', textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w600))),
+                          SizedBox(
+                            width: 100,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                IconButton(icon: const Icon(Icons.visibility, size: 18), onPressed: () => _viewQuotationDetails(quotation), tooltip: 'View'),
+                                IconButton(icon: const Icon(Icons.delete, size: 18, color: Colors.red), onPressed: () => _deleteQuotation(quotation['id']), tooltip: 'Delete'),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuotationStatusBadge(String status) {
+    Color bgColor;
+    Color textColor;
+    String label;
+    
+    switch (status) {
+      case 'converted':
+        bgColor = const Color(0xFF10B981).withValues(alpha: 0.1);
+        textColor = const Color(0xFF10B981);
+        label = 'Converted';
+        break;
+      case 'expired':
+        bgColor = const Color(0xFFEF4444).withValues(alpha: 0.1);
+        textColor = const Color(0xFFEF4444);
+        label = 'Expired';
+        break;
+      default:
+        bgColor = const Color(0xFFF59E0B).withValues(alpha: 0.1);
+        textColor = const Color(0xFFF59E0B);
+        label = 'Pending';
+    }
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(4)),
+      child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: textColor)),
+    );
+  }
+
+  Widget _buildQuotationsSummaryBar() {
+    final totalQuotations = filteredQuotations.fold<double>(0.0, (sum, q) => sum + (q['total_amount'] as double? ?? 0.0));
+    final pendingCount = filteredQuotations.where((q) => q['status'] == 'pending').length;
+    final convertedCount = filteredQuotations.where((q) => q['status'] == 'converted').length;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Color(0xFFE2E8F0), width: 2)),
+      ),
+      child: Row(
+        children: [
+          _buildSummaryCard(label: 'Total Value', value: '₹${totalQuotations.toStringAsFixed(2)}', icon: Icons.description, color: const Color(0xFF3B82F6)),
+          const SizedBox(width: 16),
+          _buildSummaryCard(label: 'Pending', value: pendingCount.toString(), icon: Icons.hourglass_empty, color: const Color(0xFFF59E0B)),
+          const SizedBox(width: 16),
+          _buildSummaryCard(label: 'Converted', value: convertedCount.toString(), icon: Icons.check_circle, color: const Color(0xFF10B981)),
+          const Spacer(),
+          Text('${filteredQuotations.length} ${filteredQuotations.length == 1 ? 'Quotation' : 'Quotations'}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+        ],
+      ),
+    );
   }
 }

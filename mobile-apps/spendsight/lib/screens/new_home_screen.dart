@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 import '../widgets/individual_dashboard.dart';
 import '../widgets/family_dashboard.dart';
 import '../widgets/business_dashboard.dart';
-import '../screens/modern_add_transaction.dart';
+import '../screens/quick_expense_screen.dart';
+import '../screens/quick_income_screen.dart';
+import '../screens/adaptive_budget_screen.dart';
 import '../providers/account_provider.dart';
 import '../models/account_type.dart';
 import '../core/modern_colors.dart';
@@ -41,7 +43,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return [
       _getAdaptiveDashboard(accountType),
       const Center(child: Text('Analytics')),
-      const Center(child: Text('Budgets')),
+      const AdaptiveBudgetScreen(),
       _buildSettingsScreen(),
     ];
   }
@@ -164,12 +166,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           floatingActionButton: FloatingActionButton(
             onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const AddTransactionScreen(),
-                ),
-              );
+              _showAddTransactionSheet(context, accountProvider.accountType);
             },
             backgroundColor: ModernColors.primary,
             child: const Icon(Icons.add_rounded, size: 28),
@@ -226,6 +223,143 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showAddTransactionSheet(BuildContext context, AccountType accountType) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: ModernColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: ModernColors.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Add Transaction',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: ModernColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildTransactionOption(
+                    context: context,
+                    icon: Icons.arrow_downward_rounded,
+                    label: 'Expense',
+                    subtitle: 'Record spending',
+                    color: const Color(0xFFEF5350),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => QuickExpenseScreen(
+                            accountType: accountType,
+                            onSaved: () => setState(() {}),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildTransactionOption(
+                    context: context,
+                    icon: Icons.arrow_upward_rounded,
+                    label: 'Income',
+                    subtitle: 'Record earnings',
+                    color: const Color(0xFF4CAF50),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => QuickIncomeScreen(
+                            accountType: accountType,
+                            onSaved: () => setState(() {}),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTransactionOption({
+    required BuildContext context,
+    required IconData icon,
+    required String label,
+    required String subtitle,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withOpacity(0.2)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(icon, color: color, size: 28),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: ModernColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 12,
+                color: ModernColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

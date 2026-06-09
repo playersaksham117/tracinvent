@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../utils/label_generator.dart';
@@ -7,6 +6,7 @@ import 'package:csv/csv.dart';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ProductsScreen extends StatefulWidget {
   const ProductsScreen({super.key});
@@ -24,6 +24,12 @@ class _ProductsScreenState extends State<ProductsScreen> {
   List<String> categories = ['All'];
   Product? _hoveredProduct;
   bool showLowStockOnly = false;  // Low stock filter
+  bool _allowNegativeStockSales = false;
+
+  int _displayStock(Product product) {
+    if (_allowNegativeStockSales || product.isService) return product.stockQuantity;
+    return product.stockQuantity < 0 ? 0 : product.stockQuantity;
+  }
 
   @override
   void initState() {
@@ -39,14 +45,19 @@ class _ProductsScreenState extends State<ProductsScreen> {
   }
 
   // Get count of low stock products
-  int get lowStockCount => products.where((p) => p.stockQuantity <= p.lowStockThreshold).length;
+  int get lowStockCount => products
+      .where((p) => !p.isService && _displayStock(p) <= p.lowStockThreshold)
+      .length;
 
   Future<void> _loadProducts() async {
     try {
+      final prefs = await SharedPreferences.getInstance();
       final db = await DatabaseHelper.instance.database;
       final result = await db.query('products', orderBy: 'name ASC');
       
       setState(() {
+        _allowNegativeStockSales =
+            prefs.getBool('allow_negative_stock_sales') ?? false;
         products = result.map((map) => Product.fromMap(map)).toList();
         filteredProducts = products;
         
@@ -79,7 +90,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   // Check and show low stock alert
   void _checkLowStockAlert() {
-    final lowStockProducts = products.where((p) => p.stockQuantity <= p.lowStockThreshold).toList();
+    final lowStockProducts = products
+        .where((p) => !p.isService && _displayStock(p) <= p.lowStockThreshold)
+        .toList();
     if (lowStockProducts.isNotEmpty && mounted) {
       Future.delayed(const Duration(milliseconds: 500), () {
         if (!mounted) return;
@@ -128,8 +141,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
         final matchesCategory = selectedCategory == 'All' ||
                product.category == selectedCategory;
         
-        final matchesLowStock = !showLowStockOnly || 
-               (product.stockQuantity <= product.lowStockThreshold);
+        final matchesLowStock = !showLowStockOnly ||
+               (!product.isService && _displayStock(product) <= product.lowStockThreshold);
         
         return matchesSearch && matchesCategory && matchesLowStock;
       }).toList();
@@ -177,13 +190,14 @@ class _ProductsScreenState extends State<ProductsScreen> {
   Future<void> _exportCSV() async {
     try {
       List<List<dynamic>> rows = [
-        ['Name', 'SKU', 'Barcode', 'Category', 'Brand', 'Price', 'Cost', 'Tax Rate', 'Stock', 'Description']
+        ['Name', 'SKU', 'Type', 'Barcode', 'Category', 'Brand', 'Price', 'Cost', 'Tax Rate', 'Stock', 'Description']
       ];
 
       for (var product in products) {
         rows.add([
           product.name,
           product.sku,
+          product.productType,
           product.barcode ?? '',
           product.category ?? '',
           product.brand ?? '',
@@ -238,20 +252,21 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
         for (int i = 1; i < rows.length; i++) {
           final row = rows[i];
-          if (row.length >= 9) {
+          if (row.length >= 10) {
             try {
               await db.insert('products', {
                 'tenant_id': 'default',
                 'name': row[0].toString(),
                 'sku': row[1].toString(),
-                'barcode': row[2].toString(),
-                'category': row[3].toString(),
-                'brand': row[4].toString(),
-                'price': double.tryParse(row[5].toString()) ?? 0.0,
-                'cost': double.tryParse(row[6].toString()) ?? 0.0,
-                'tax_rate': double.tryParse(row[7].toString()) ?? 0.0,
-                'stock_quantity': int.tryParse(row[8].toString()) ?? 0,
-                'description': row.length > 9 ? row[9].toString() : '',
+                'product_type': row[2].toString().toLowerCase() == 'service' ? 'service' : 'product',
+                'barcode': row[3].toString(),
+                'category': row[4].toString(),
+                'brand': row[5].toString(),
+                'price': double.tryParse(row[6].toString()) ?? 0.0,
+                'cost': double.tryParse(row[7].toString()) ?? 0.0,
+                'tax_rate': double.tryParse(row[8].toString()) ?? 0.0,
+                'stock_quantity': int.tryParse(row[9].toString()) ?? 0,
+                'description': row.length > 10 ? row[10].toString() : '',
                 'unit': 'piece',
                 'is_active': 1,
                 'sync_status': 0,
@@ -341,7 +356,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
           ),
           const SizedBox(width: 8),
           const Text(
-            'Product Management',
+            'Product / Service Management',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
@@ -357,7 +372,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
               child: TextField(
                 controller: searchController,
                 decoration: InputDecoration(
-                  hintText: 'Search by name, SKU, or barcode...',
+                  hintText: 'Search by name, SKU, barcode...',
                   hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
                   prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFF64748B)),
                   border: OutlineInputBorder(
@@ -507,7 +522,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
           ElevatedButton.icon(
             onPressed: () => _showProductDialog(null),
             icon: const Icon(Icons.add, size: 18),
-            label: const Text('Add Product'),
+            label: const Text('Add Item'),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF3B82F6),
               foregroundColor: Colors.white,
@@ -549,7 +564,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
           const Expanded(
             flex: 3,
             child: Text(
-              'PRODUCT NAME',
+              'NAME',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
@@ -598,7 +613,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
           const Expanded(
             flex: 1,
             child: Text(
-              'STOCK',
+              'STOCK / SOLD',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
@@ -734,13 +749,17 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 Expanded(
                   flex: 1,
                   child: Tooltip(
-                    message: product.stockQuantity <= product.lowStockThreshold
+                    message: product.isService
+                        ? 'Total sold services: ${_displayStock(product)}'
+                        : _displayStock(product) <= product.lowStockThreshold
                         ? 'Low stock! Threshold: ${product.lowStockThreshold}'
                         : 'Stock OK (Threshold: ${product.lowStockThreshold})',
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                       decoration: BoxDecoration(
-                        color: product.stockQuantity <= product.lowStockThreshold
+                        color: product.isService
+                            ? const Color(0xFFEDE9FE)
+                            : _displayStock(product) <= product.lowStockThreshold
                             ? const Color(0xFFFEE2E2)
                             : const Color(0xFFDCFCE7),
                         borderRadius: BorderRadius.circular(12),
@@ -749,17 +768,21 @@ class _ProductsScreenState extends State<ProductsScreen> {
                         mainAxisSize: MainAxisSize.min,
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          if (product.stockQuantity <= product.lowStockThreshold)
+                          if (!product.isService && _displayStock(product) <= product.lowStockThreshold)
                             const Padding(
                               padding: EdgeInsets.only(right: 4),
                               child: Icon(Icons.warning_amber_rounded, size: 12, color: Color(0xFFDC2626)),
                             ),
                           Text(
-                            product.stockQuantity.toString(),
+                            product.isService
+                                ? 'S:${_displayStock(product)}'
+                                : _displayStock(product).toString(),
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: product.stockQuantity <= product.lowStockThreshold
+                              color: product.isService
+                                  ? const Color(0xFF6D28D9)
+                                  : _displayStock(product) <= product.lowStockThreshold
                                   ? const Color(0xFFDC2626)
                                   : const Color(0xFF16A34A),
                             ),
@@ -842,7 +865,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
           ),
           const SizedBox(height: 24),
           const Text(
-            'No products yet',
+            'No items yet',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w600,
@@ -851,7 +874,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Get started by adding your first product',
+            'Get started by adding your first product or service',
             style: TextStyle(
               fontSize: 14,
               color: Color(0xFF64748B),
@@ -861,7 +884,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
           ElevatedButton.icon(
             onPressed: () => _showProductDialog(null),
             icon: const Icon(Icons.add, size: 18),
-            label: const Text('Add Your First Product'),
+            label: const Text('Add Your First Item'),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF3B82F6),
               foregroundColor: Colors.white,
@@ -886,13 +909,16 @@ class _ProductsScreenState extends State<ProductsScreen> {
     final barcodeController = TextEditingController(text: product?.barcode ?? '');
     final categoryController = TextEditingController(text: product?.category ?? '');
     final brandController = TextEditingController(text: product?.brand ?? '');
+    final hsnSacController = TextEditingController(text: product?.hsnSac ?? '');
+    final modelVariantController = TextEditingController(text: product?.modelVariant ?? '');
     final descriptionController = TextEditingController(text: product?.description ?? '');
     final priceController = TextEditingController(text: product?.price.toString() ?? '');
     final costController = TextEditingController(text: product?.cost.toString() ?? '');
     final taxController = TextEditingController(
-      text: product != null ? (product.taxRate * 100).toString() : '18'
+      text: product != null ? product.taxRate.toString() : '18'
     );
     final stockController = TextEditingController(text: product?.stockQuantity.toString() ?? '0');
+    String productType = product?.productType ?? 'product';
     
     final formKey = GlobalKey<FormState>();
     
@@ -945,7 +971,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     ),
                     const SizedBox(width: 16),
                     Text(
-                      isEdit ? 'Edit Product' : 'Add New Product',
+                      isEdit ? 'Edit Item' : 'Add New Item',
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -979,8 +1005,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
                           controller: nameController,
                           focusNode: nameFocusNode,
                           decoration: _inputDecoration(
-                            label: 'Product Name',
-                            hint: 'Enter product name',
+                            label: 'Name',
+                            hint: 'Enter product or service name',
                             isRequired: true,
                           ),
                           validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
@@ -1047,6 +1073,33 @@ class _ProductsScreenState extends State<ProductsScreen> {
                             ),
                           ],
                         ),
+                        const SizedBox(height: 16),
+                        
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextFormField(
+                                controller: hsnSacController,
+                                decoration: _inputDecoration(
+                                  label: 'HSN/SAC Code',
+                                  hint: 'e.g., 8471',
+                                ),
+                                textInputAction: TextInputAction.next,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: TextFormField(
+                                controller: modelVariantController,
+                                decoration: _inputDecoration(
+                                  label: 'Model/Variant',
+                                  hint: 'e.g., Pro Max 256GB',
+                                ),
+                                textInputAction: TextInputAction.next,
+                              ),
+                            ),
+                          ],
+                        ),
                         
                         const SizedBox(height: 32),
                         
@@ -1063,12 +1116,12 @@ class _ProductsScreenState extends State<ProductsScreen> {
                                   label: 'Selling Price',
                                   hint: '0.00',
                                   prefix: '₹',
-                                  isRequired: true,
                                 ),
                                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                 validator: (v) {
-                                  if (v?.isEmpty ?? true) return 'Required';
-                                  if (double.tryParse(v!) == null) return 'Invalid number';
+                                  if (v != null && v.isNotEmpty && double.tryParse(v) == null) {
+                                    return 'Invalid number';
+                                  }
                                   return null;
                                 },
                                 textInputAction: TextInputAction.next,
@@ -1093,7 +1146,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                         const SizedBox(height: 32),
                         
                         // SECTION 4: Tax & Stock
-                        _buildSectionHeader('Tax & Inventory', Icons.inventory_outlined),
+                        _buildSectionHeader('Tax & Stock', Icons.inventory_outlined),
                         const SizedBox(height: 16),
                         
                         Row(
@@ -1129,16 +1182,38 @@ class _ProductsScreenState extends State<ProductsScreen> {
                             ),
                             const SizedBox(width: 16),
                             Expanded(
+                              child: DropdownButtonFormField<String>(
+                                initialValue: productType,
+                                decoration: _inputDecoration(
+                                  label: 'Type',
+                                  hint: 'Select type',
+                                  isRequired: true,
+                                ),
+                                items: const [
+                                  DropdownMenuItem(value: 'product', child: Text('Product')),
+                                  DropdownMenuItem(value: 'service', child: Text('Service')),
+                                ],
+                                onChanged: (value) {
+                                  if (value == null) return;
+                                  productType = value;
+                                  if (productType == 'service') {
+                                    stockController.text = '0';
+                                  }
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
                               child: TextFormField(
                                 controller: stockController,
                                 decoration: _inputDecoration(
-                                  label: 'Stock Quantity',
+                                  label: productType == 'service' ? 'Sold Count' : 'Stock Quantity',
                                   hint: '0',
-                                  isRequired: true,
+                                  isRequired: productType == 'product',
                                 ),
                                 keyboardType: TextInputType.number,
                                 validator: (v) {
-                                  if (v?.isEmpty ?? true) return 'Required';
+                                  if (productType == 'product' && (v?.isEmpty ?? true)) return 'Required';
                                   if (int.tryParse(v!) == null) return 'Invalid number';
                                   return null;
                                 },
@@ -1172,11 +1247,14 @@ class _ProductsScreenState extends State<ProductsScreen> {
                             barcodeController,
                             categoryController,
                             brandController,
+                            hsnSacController,
+                            modelVariantController,
                             descriptionController,
                             priceController,
                             costController,
                             taxController,
                             stockController,
+                            productType,
                           ),
                         ),
                       ],
@@ -1223,11 +1301,14 @@ class _ProductsScreenState extends State<ProductsScreen> {
                         barcodeController,
                         categoryController,
                         brandController,
+                        hsnSacController,
+                        modelVariantController,
                         descriptionController,
                         priceController,
                         costController,
                         taxController,
                         stockController,
+                        productType,
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF3B82F6),
@@ -1243,7 +1324,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                         children: [
                           const Icon(Icons.check, size: 18),
                           const SizedBox(width: 8),
-                          Text(isEdit ? 'Update Product' : 'Save Product'),
+                          Text(isEdit ? 'Update Item' : 'Save Item'),
                         ],
                       ),
                     ),
@@ -1352,11 +1433,14 @@ class _ProductsScreenState extends State<ProductsScreen> {
     TextEditingController barcodeController,
     TextEditingController categoryController,
     TextEditingController brandController,
+    TextEditingController hsnSacController,
+    TextEditingController modelVariantController,
     TextEditingController descriptionController,
     TextEditingController priceController,
     TextEditingController costController,
     TextEditingController taxController,
     TextEditingController stockController,
+    String productType,
   ) async {
     if (!formKey.currentState!.validate()) {
       return;
@@ -1364,6 +1448,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
     try {
       final db = await DatabaseHelper.instance.database;
+      final parsedStock = int.tryParse(stockController.text) ?? 0;
       final data = {
         'tenant_id': 'default',
         'name': nameController.text,
@@ -1371,11 +1456,14 @@ class _ProductsScreenState extends State<ProductsScreen> {
         'barcode': barcodeController.text.isEmpty ? null : barcodeController.text,
         'category': categoryController.text.isEmpty ? null : categoryController.text,
         'brand': brandController.text.isEmpty ? null : brandController.text,
+        'hsn_sac': hsnSacController.text.isEmpty ? null : hsnSacController.text,
+        'model_variant': modelVariantController.text.isEmpty ? null : modelVariantController.text,
         'description': descriptionController.text.isEmpty ? null : descriptionController.text,
         'price': double.tryParse(priceController.text) ?? 0.0,
         'cost': double.tryParse(costController.text) ?? 0.0,
-        'tax_rate': (double.tryParse(taxController.text) ?? 0.0) / 100,
-        'stock_quantity': int.tryParse(stockController.text) ?? 0,
+        'tax_rate': double.tryParse(taxController.text) ?? 0.0,
+        'product_type': productType,
+        'stock_quantity': productType == 'service' ? parsedStock.clamp(0, 2147483647) : parsedStock,
         'unit': 'piece',
         'is_active': 1,
         'sync_status': 0,
@@ -1397,7 +1485,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
             children: [
               const Icon(Icons.check_circle, color: Colors.white, size: 20),
               const SizedBox(width: 12),
-              Text('Product ${isEdit ? "updated" : "added"} successfully'),
+              Text('Item ${isEdit ? "updated" : "added"} successfully'),
             ],
           ),
           backgroundColor: const Color(0xFF16A34A),

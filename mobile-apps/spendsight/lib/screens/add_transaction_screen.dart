@@ -92,34 +92,33 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                   borderRadius: AppRadius.largeRadius,
                 ),
                 padding: const EdgeInsets.all(4),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _TypeButton(
-                          label: 'Expense',
-                          isSelected: _isExpense,
-                          onTap: () {
-                            setState(() {
-                              _isExpense = true;
-                              _selectedCategory = null;
-                            });
-                          },
-                        ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _TypeButton(
+                        label: 'Expense',
+                        isSelected: _isExpense,
+                        onTap: () {
+                          setState(() {
+                            _isExpense = true;
+                            _selectedCategory = null;
+                          });
+                        },
                       ),
-                      Expanded(
-                        child: _TypeButton(
-                          label: 'Income',
-                          isSelected: !_isExpense,
-                          onTap: () {
-                            setState(() {
-                              _isExpense = false;
-                              _selectedCategory = null;
-                            });
-                          },
-                        ),
+                    ),
+                    Expanded(
+                      child: _TypeButton(
+                        label: 'Income',
+                        isSelected: !_isExpense,
+                        onTap: () {
+                          setState(() {
+                            _isExpense = false;
+                            _selectedCategory = null;
+                          });
+                        },
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
               
@@ -171,6 +170,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                   }
                   return null;
                 },
+              ),
               ),
               
               const SizedBox(height: 24),

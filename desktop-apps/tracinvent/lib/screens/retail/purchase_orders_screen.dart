@@ -102,9 +102,9 @@ class _PurchaseOrdersScreenState extends State<PurchaseOrdersScreen> {
 
     String? supplierId = suppliers.first.id;
     String? warehouseId = warehouses.first.id;
-    InventoryItem? selectedItem = items.first;
+    InventoryItem selectedItem = items.first;
     final qtyController = TextEditingController(text: '1');
-    final costController = TextEditingController(text: selectedItem!.costPrice.toString());
+    final costController = TextEditingController(text: selectedItem.costPrice.toString());
 
     await showDialog(
       context: context,
@@ -117,24 +117,24 @@ class _PurchaseOrdersScreenState extends State<PurchaseOrdersScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<String>(
-                  value: supplierId,
+                  initialValue: supplierId,
                   decoration: const InputDecoration(labelText: 'Supplier'),
                   items: suppliers.map((s) => DropdownMenuItem(value: s.id, child: Text(s.name))).toList(),
                   onChanged: (v) => setState(() => supplierId = v),
                 ),
                 DropdownButtonFormField<String>(
-                  value: warehouseId,
+                  initialValue: warehouseId,
                   decoration: const InputDecoration(labelText: 'Warehouse'),
                   items: warehouses.map((w) => DropdownMenuItem(value: w.id, child: Text(w.name))).toList(),
                   onChanged: (v) => setState(() => warehouseId = v),
                 ),
                 DropdownButtonFormField<String>(
-                  value: selectedItem?.id,
+                  initialValue: selectedItem.id,
                   decoration: const InputDecoration(labelText: 'Product'),
                   items: items.map((i) => DropdownMenuItem(value: i.id, child: Text(i.name))).toList(),
                   onChanged: (v) => setState(() {
                     selectedItem = items.firstWhere((i) => i.id == v);
-                    costController.text = selectedItem!.costPrice.toString();
+                    costController.text = selectedItem.costPrice.toString();
                   }),
                 ),
                 TextField(controller: qtyController, decoration: const InputDecoration(labelText: 'Qty'), keyboardType: TextInputType.number),
@@ -149,14 +149,14 @@ class _PurchaseOrdersScreenState extends State<PurchaseOrdersScreen> {
                 final supplier = suppliers.firstWhere((s) => s.id == supplierId);
                 final qty = double.tryParse(qtyController.text) ?? 1;
                 final cost = double.tryParse(costController.text) ?? 0;
-                final taxRate = 0.0;
+                const taxRate = 0.0;
                 final lineTotal = qty * cost;
                 final line = PurchaseOrderLine(
                   id: const Uuid().v4(),
                   purchaseOrderId: '',
-                  itemId: selectedItem!.id,
-                  itemName: selectedItem!.name,
-                  sku: selectedItem!.sku,
+                  itemId: selectedItem.id,
+                  itemName: selectedItem.name,
+                  sku: selectedItem.sku,
                   orderedQty: qty,
                   unitCost: cost,
                   taxRate: taxRate,

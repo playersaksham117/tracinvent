@@ -36,7 +36,7 @@ class _NavigationSidebarState extends State<NavigationSidebar> {
     ),
     SidebarItemConfig(
       icon: Icons.inventory_2_rounded,
-      label: 'Inventory',
+      label: 'Product / Service',
       route: '/products',
       shortcut: 'Ctrl+I',
     ),

@@ -24,8 +24,6 @@ class DeadStockAnalyticsService {
 
   Future<List<Map<String, dynamic>>> getAgingStockReport() async {
     final db = await DatabaseManager.instance.database;
-    final now = DateTime.now();
-
     return db.rawQuery('''
       SELECT i.id, i.name, i.sku, i.category,
              COALESCE(SUM(s.quantity), 0) as onHand,
