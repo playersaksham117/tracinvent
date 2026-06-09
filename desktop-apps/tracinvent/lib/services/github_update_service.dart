@@ -10,15 +10,18 @@ import '../models/update_info.dart';
 /// GitHub-based auto-update service for TracInvent
 class GitHubUpdateService {
   // ============ CONFIGURATION ============
-  // TODO: Replace with your actual GitHub repository
-  static const String githubOwner = 'YourGitHubUsername';  // Change this
-  static const String githubRepo = 'tracinvent';           // Change this
-  static const String currentVersion = '1.0.0';            // Update with each release
+  static const String githubOwner = 'playersaksham117';  // Your GitHub username
+  static const String githubRepo = 'tracinvent';         // Your repository name
+  static const String currentVersion = String.fromEnvironment(
+    'APP_VERSION',
+    defaultValue: '1.1.0',
+  );
   
   // GitHub API URLs
   static String get _releasesApiUrl => 
       'https://api.github.com/repos/$githubOwner/$githubRepo/releases/latest';
   
+  // ignore: unused_element - kept for future use (fetching all releases)
   static String get _allReleasesApiUrl => 
       'https://api.github.com/repos/$githubOwner/$githubRepo/releases';
 
@@ -167,8 +170,6 @@ class GitHubUpdateService {
       } else {
         throw Exception('Unsupported installer format: $extension');
       }
-
-      return true;
     } catch (e) {
       debugPrint('Error installing update: $e');
       rethrow;

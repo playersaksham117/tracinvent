@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/warehouse_provider.dart';
 import '../models/location.dart';
-import '../services/database_service.dart';
+import '../services/unified_database_manager.dart';
 
 /// Screen showing where all stocks are located from Warehouse to Cell level
 /// Displays a hierarchical view: Warehouse → Cells → Products with quantities
@@ -16,13 +16,12 @@ class StockLocationScreen extends StatefulWidget {
 
 class _StockLocationScreenState extends State<StockLocationScreen> {
   String? _selectedWarehouseId;
-  String? _selectedZoneId;
   String? _selectedCellId;
   List<Map<String, dynamic>> _cellStocks = [];
-  List<Zone> _zones = [];
   List<Cell> _cells = [];
   bool _isLoading = false;
   String _searchQuery = '';
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -31,109 +30,114 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
   }
 
   Future<void> _loadData() async {
-    setState(() => _isLoading = true);
-    final warehouseProvider = Provider.of<WarehouseProvider>(context, listen: false);
-    await warehouseProvider.loadWarehouses();
-    
-    if (warehouseProvider.warehouses.isNotEmpty && _selectedWarehouseId == null) {
-      _selectedWarehouseId = warehouseProvider.warehouses.first.id;
-      await _loadZones();
-      await _loadCells();
-    }
-    setState(() => _isLoading = false);
-  }
-
-  Future<void> _loadZones() async {
-    if (_selectedWarehouseId == null) return;
-    
-    final db = await DatabaseService.database;
-    final zoneMaps = await db.query(
-      'zones',
-      where: 'warehouseId = ?',
-      whereArgs: [_selectedWarehouseId],
-      orderBy: 'name',
-    );
-    
     setState(() {
-      _zones = zoneMaps.map((m) => Zone.fromMap(m)).toList();
-      _selectedZoneId = null;
+      _isLoading = true;
+      _errorMessage = null;
     });
+
+    try {
+      final warehouseProvider =
+          Provider.of<WarehouseProvider>(context, listen: false);
+      await warehouseProvider.loadWarehouses();
+
+      if (warehouseProvider.warehouses.isNotEmpty &&
+          _selectedWarehouseId == null) {
+        _selectedWarehouseId = warehouseProvider.warehouses.first.id;
+        await _loadCells();
+      }
+    } catch (e) {
+      print('Error loading data in StockLocationScreen: $e');
+      setState(() {
+        _errorMessage = 'Failed to load data: ${e.toString()}';
+      });
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _loadCells() async {
     if (_selectedWarehouseId == null) return;
-    
-    final db = await DatabaseService.database;
-    List<Map<String, dynamic>> cellMaps;
-    
-    if (_selectedZoneId != null) {
-      cellMaps = await db.query(
-        'cells',
-        where: 'warehouseId = ? AND zoneId = ?',
-        whereArgs: [_selectedWarehouseId, _selectedZoneId],
-      );
-    } else {
-      cellMaps = await db.query(
+
+    try {
+      final db = await DatabaseManager.instance.database;
+      final cellMaps = await db.query(
         'cells',
         where: 'warehouseId = ?',
         whereArgs: [_selectedWarehouseId],
+        orderBy: 'code',
       );
+
+      setState(() {
+        _cells = cellMaps.map((m) => Cell.fromMap(m)).toList();
+        _selectedCellId = null;
+      });
+
+      await _loadCellStocks();
+    } catch (e) {
+      print('Error loading cells: $e');
+      setState(() {
+        _cells = [];
+      });
     }
-    
-    setState(() {
-      _cells = cellMaps.map((m) => Cell.fromMap(m)).toList();
-      _selectedCellId = null;
-    });
-    
-    await _loadCellStocks();
   }
 
   Future<void> _loadCellStocks() async {
     if (_selectedWarehouseId == null) return;
-    
-    final db = await DatabaseService.database;
-    
-    String query = '''
-      SELECT 
-        s.id as stockId,
-        s.itemId,
-        s.warehouseId,
-        s.cellId,
-        s.quantity,
-        s.batchNumber,
-        s.expiryDate,
-        s.lastUpdated,
-        i.name as itemName,
-        i.sku,
-        i.unit,
-        i.category,
-        i.costPrice,
-        i.sellingPrice,
-        c.name as cellName,
-        c.code as cellCode,
-        w.name as warehouseName
-      FROM stocks s
-      JOIN inventory_items i ON s.itemId = i.id
-      LEFT JOIN cells c ON s.cellId = c.id
-      JOIN warehouses w ON s.warehouseId = w.id
-      WHERE s.warehouseId = ?
-      AND s.quantity > 0
-    ''';
-    
-    List<dynamic> args = [_selectedWarehouseId];
-    
-    if (_selectedCellId != null) {
-      query += ' AND s.cellId = ?';
-      args.add(_selectedCellId);
+
+    try {
+      final db = await DatabaseManager.instance.database;
+
+      String query = '''
+        SELECT 
+          s.id as stockId,
+          s.itemId,
+          s.warehouseId,
+          s.cellId,
+          s.quantity,
+          s.batchNumber,
+          s.expiryDate,
+          s.lastUpdated,
+          i.name as itemName,
+          i.sku,
+          i.unit,
+          i.category,
+          i.costPrice,
+          i.sellingPrice,
+          c.name as cellName,
+          c.code as cellCode,
+          w.name as warehouseName
+        FROM stocks s
+        JOIN inventory_items i ON s.itemId = i.id
+        LEFT JOIN cells c ON s.cellId = c.id
+        JOIN warehouses w ON s.warehouseId = w.id
+        WHERE s.warehouseId = ?
+        AND s.quantity > 0
+      ''';
+
+      List<dynamic> args = [_selectedWarehouseId];
+
+      if (_selectedCellId != null && _selectedCellId != 'unassigned') {
+        query += ' AND s.cellId = ?';
+        args.add(_selectedCellId);
+      } else if (_selectedCellId == 'unassigned') {
+        query += ' AND s.cellId IS NULL';
+      }
+
+      query += ' ORDER BY c.code, i.name';
+
+      final results = await db.rawQuery(query, args);
+
+      setState(() {
+        _cellStocks = results.cast<Map<String, dynamic>>();
+        _errorMessage = null;
+      });
+    } catch (e) {
+      print('Error loading cell stocks: $e');
+      setState(() {
+        _cellStocks = [];
+        _errorMessage = 'Failed to load stocks: ${e.toString()}';
+      });
     }
-    
-    query += ' ORDER BY c.code, i.name';
-    
-    final results = await db.rawQuery(query, args);
-    
-    setState(() {
-      _cellStocks = results.cast<Map<String, dynamic>>();
-    });
   }
 
   @override
@@ -143,6 +147,29 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
       body: Column(
         children: [
           _buildTopBar(context),
+          if (_errorMessage != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              color: Colors.red.shade50,
+              child: Row(
+                children: [
+                  Icon(Icons.error_outline,
+                      color: Colors.red.shade700, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _errorMessage!,
+                      style: TextStyle(color: Colors.red.shade700),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _loadData,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -215,7 +242,8 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
                   borderRadius: BorderRadius.circular(8),
                   borderSide: BorderSide(color: Colors.grey.shade300),
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
               onChanged: (value) {
                 setState(() => _searchQuery = value.toLowerCase());
@@ -256,7 +284,8 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
                       color: const Color(0xFFEFF6FF),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.account_tree, color: Color(0xFF3B82F6), size: 20),
+                    child: const Icon(Icons.account_tree,
+                        color: Color(0xFF3B82F6), size: 20),
                   ),
                   const SizedBox(width: 12),
                   const Text(
@@ -277,14 +306,15 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
                 children: [
                   // Warehouse Selector
                   DropdownButtonFormField<String>(
-                    value: _selectedWarehouseId,
+                    initialValue: _selectedWarehouseId,
                     decoration: InputDecoration(
                       labelText: 'Warehouse',
                       prefixIcon: const Icon(Icons.warehouse, size: 20),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 12),
                     ),
                     items: warehouseProvider.warehouses.map((w) {
                       return DropdownMenuItem(
@@ -295,48 +325,13 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
                     onChanged: (value) {
                       setState(() {
                         _selectedWarehouseId = value;
-                        _selectedZoneId = null;
-                        _selectedCellId = null;
-                      });
-                      _loadZones();
-                      _loadCells();
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  
-                  // Zone Selector
-                  DropdownButtonFormField<String?>(
-                    value: _selectedZoneId,
-                    decoration: InputDecoration(
-                      labelText: 'Zone (Optional)',
-                      prefixIcon: const Icon(Icons.dashboard_outlined, size: 20),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    ),
-                    items: [
-                      const DropdownMenuItem<String?>(
-                        value: null,
-                        child: Text('All Zones'),
-                      ),
-                      ..._zones.map((z) {
-                        return DropdownMenuItem<String?>(
-                          value: z.id,
-                          child: Text(z.name),
-                        );
-                      }),
-                    ],
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedZoneId = value;
                         _selectedCellId = null;
                       });
                       _loadCells();
                     },
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // All Cells Option
                   _buildTreeItem(
                     icon: Icons.grid_view,
@@ -349,10 +344,11 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
                     },
                     level: 0,
                   ),
-                  
+
                   // Individual Cells
                   ..._cells.map((cell) {
-                    final stockCount = _cellStocks.where((s) => s['cellId'] == cell.id).length;
+                    final stockCount =
+                        _cellStocks.where((s) => s['cellId'] == cell.id).length;
                     return _buildTreeItem(
                       icon: Icons.inventory_2,
                       title: cell.name,
@@ -365,7 +361,7 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
                       level: 1,
                     );
                   }),
-                  
+
                   // Unassigned Stock
                   _buildTreeItem(
                     icon: Icons.help_outline,
@@ -398,7 +394,7 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
     Color? color,
   }) {
     final primaryColor = color ?? const Color(0xFF3B82F6);
-    
+
     return Padding(
       padding: EdgeInsets.only(left: level * 16.0, bottom: 8),
       child: Material(
@@ -409,10 +405,14 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: isSelected ? primaryColor.withOpacity(0.1) : Colors.transparent,
+              color: isSelected
+                  ? primaryColor.withValues(alpha: 0.1)
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: isSelected ? primaryColor.withOpacity(0.3) : Colors.grey.shade200,
+                color: isSelected
+                    ? primaryColor.withValues(alpha: 0.3)
+                    : Colors.grey.shade200,
               ),
             ),
             child: Row(
@@ -420,7 +420,9 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: isSelected ? primaryColor.withOpacity(0.2) : Colors.grey.shade100,
+                    color: isSelected
+                        ? primaryColor.withValues(alpha: 0.2)
+                        : Colors.grey.shade100,
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Icon(
@@ -438,8 +440,11 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
                         title,
                         style: TextStyle(
                           fontSize: 13,
-                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                          color: isSelected ? primaryColor : const Color(0xFF0F172A),
+                          fontWeight:
+                              isSelected ? FontWeight.w600 : FontWeight.w500,
+                          color: isSelected
+                              ? primaryColor
+                              : const Color(0xFF0F172A),
                         ),
                       ),
                       Text(
@@ -488,7 +493,7 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
           // Summary Cards
           _buildSummaryCards(filteredStocks),
           const SizedBox(height: 24),
-          
+
           // Stock List by Cell
           if (filteredStocks.isEmpty)
             _buildEmptyState()
@@ -508,7 +513,7 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
                   updatedAt: DateTime.now(),
                 ),
               );
-              
+
               return _buildCellStockCard(cell, stocks);
             }),
         ],
@@ -517,14 +522,16 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
   }
 
   Widget _buildSummaryCards(List<Map<String, dynamic>> stocks) {
-    final totalQuantity = stocks.fold<double>(0, (sum, s) => sum + (s['quantity'] as num? ?? 0).toDouble());
+    final totalQuantity = stocks.fold<double>(
+        0, (sum, s) => sum + (s['quantity'] as num? ?? 0).toDouble());
     final totalValue = stocks.fold<double>(0, (sum, s) {
       final qty = (s['quantity'] as num? ?? 0).toDouble();
       final cost = (s['costPrice'] as num? ?? 0).toDouble();
       return sum + (qty * cost);
     });
     final uniqueProducts = stocks.map((s) => s['itemId']).toSet().length;
-    final cellsInUse = stocks.map((s) => s['cellId']).where((c) => c != null).toSet().length;
+    final cellsInUse =
+        stocks.map((s) => s['cellId']).where((c) => c != null).toSet().length;
 
     return Row(
       children: [
@@ -544,7 +551,8 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
         const SizedBox(width: 16),
         _buildSummaryCard(
           'Total Value',
-          NumberFormat.compactCurrency(symbol: '₹', locale: 'en_IN').format(totalValue),
+          NumberFormat.compactCurrency(symbol: '₹', locale: 'en_IN')
+              .format(totalValue),
           Icons.currency_rupee,
           const Color(0xFF8B5CF6),
         ),
@@ -559,7 +567,8 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
     );
   }
 
-  Widget _buildSummaryCard(String title, String value, IconData icon, Color color) {
+  Widget _buildSummaryCard(
+      String title, String value, IconData icon, Color color) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(20),
@@ -573,7 +582,7 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(icon, color: color, size: 24),
@@ -607,8 +616,9 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
   }
 
   Widget _buildCellStockCard(Cell cell, List<Map<String, dynamic>> stocks) {
-    final totalQty = stocks.fold<double>(0, (sum, s) => sum + (s['quantity'] as num? ?? 0).toDouble());
-    
+    final totalQty = stocks.fold<double>(
+        0, (sum, s) => sum + (s['quantity'] as num? ?? 0).toDouble());
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -637,7 +647,7 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF3B82F6).withOpacity(0.1),
+                    color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
@@ -670,9 +680,10 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF10B981).withOpacity(0.1),
+                    color: const Color(0xFF10B981).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
@@ -692,7 +703,8 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: stocks.length,
-            separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey.shade100),
+            separatorBuilder: (_, __) =>
+                Divider(height: 1, color: Colors.grey.shade100),
             itemBuilder: (context, index) {
               final stock = stocks[index];
               return _buildStockRow(stock);
@@ -707,11 +719,11 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
     final quantity = (stock['quantity'] as num? ?? 0).toDouble();
     final costPrice = (stock['costPrice'] as num? ?? 0).toDouble();
     final value = quantity * costPrice;
-    final expiryDate = stock['expiryDate'] != null 
+    final expiryDate = stock['expiryDate'] != null
         ? DateTime.parse(stock['expiryDate'] as String)
         : null;
     final lastUpdated = DateTime.parse(stock['lastUpdated'] as String);
-    
+
     bool isExpiringSoon = false;
     bool isExpired = false;
     if (expiryDate != null) {
@@ -742,7 +754,8 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: Colors.grey.shade100,
                         borderRadius: BorderRadius.circular(4),
@@ -786,17 +799,29 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
                   Row(
                     children: [
                       Icon(
-                        isExpired ? Icons.error : (isExpiringSoon ? Icons.warning : Icons.check_circle),
+                        isExpired
+                            ? Icons.error
+                            : (isExpiringSoon
+                                ? Icons.warning
+                                : Icons.check_circle),
                         size: 14,
-                        color: isExpired ? Colors.red : (isExpiringSoon ? Colors.orange : Colors.green),
+                        color: isExpired
+                            ? Colors.red
+                            : (isExpiringSoon ? Colors.orange : Colors.green),
                       ),
                       const SizedBox(width: 4),
                       Text(
                         'Exp: ${DateFormat('MMM dd, yy').format(expiryDate)}',
                         style: TextStyle(
                           fontSize: 12,
-                          color: isExpired ? Colors.red : (isExpiringSoon ? Colors.orange : Colors.grey.shade700),
-                          fontWeight: isExpired || isExpiringSoon ? FontWeight.w600 : FontWeight.normal,
+                          color: isExpired
+                              ? Colors.red
+                              : (isExpiringSoon
+                                  ? Colors.orange
+                                  : Colors.grey.shade700),
+                          fontWeight: isExpired || isExpiringSoon
+                              ? FontWeight.w600
+                              : FontWeight.normal,
                         ),
                       ),
                     ],
@@ -836,7 +861,8 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  NumberFormat.compactCurrency(symbol: '₹', locale: 'en_IN').format(value),
+                  NumberFormat.compactCurrency(symbol: '₹', locale: 'en_IN')
+                      .format(value),
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -865,7 +891,8 @@ class _StockLocationScreenState extends State<StockLocationScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.inventory_2_outlined, size: 80, color: Colors.grey.shade300),
+            Icon(Icons.inventory_2_outlined,
+                size: 80, color: Colors.grey.shade300),
             const SizedBox(height: 16),
             Text(
               'No stocks found',

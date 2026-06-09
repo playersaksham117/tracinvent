@@ -108,7 +108,7 @@ class _PinLoginScreenState extends State<PinLoginScreen> {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF2563EB).withOpacity(0.1),
+                        color: const Color(0xFF2563EB).withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(

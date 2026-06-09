@@ -140,8 +140,8 @@ class InventoryMovementLineChart extends StatelessWidget {
                 show: true,
                 gradient: LinearGradient(
                   colors: [
-                    const Color(0xFF10B981).withOpacity(0.3),
-                    const Color(0xFF10B981).withOpacity(0.0),
+                    const Color(0xFF10B981).withValues(alpha: 0.3),
+                    const Color(0xFF10B981).withValues(alpha: 0.0),
                   ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -170,8 +170,8 @@ class InventoryMovementLineChart extends StatelessWidget {
                 show: true,
                 gradient: LinearGradient(
                   colors: [
-                    const Color(0xFFEF4444).withOpacity(0.3),
-                    const Color(0xFFEF4444).withOpacity(0.0),
+                    const Color(0xFFEF4444).withValues(alpha: 0.3),
+                    const Color(0xFFEF4444).withValues(alpha: 0.0),
                   ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -472,7 +472,7 @@ class WarehouseComparisonBarChart extends StatelessWidget {
                 gradient: LinearGradient(
                   colors: [
                     color,
-                    color.withOpacity(0.7),
+                    color.withValues(alpha: 0.7),
                   ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,

@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import '../models/inventory_item.dart';
 
 /// Professional Stock Adjustment Modal
-/// 
+///
 /// UX RATIONALE:
 /// - Single modal reduces cognitive load vs separate add/reduce screens
 /// - Toggle button provides clear visual state (destructive red for reduce)
@@ -11,7 +11,7 @@ import '../models/inventory_item.dart';
 /// - Mandatory reason dropdown prevents accidental adjustments
 /// - Stock preview shows before/after values for validation
 /// - Fixed footer buttons prevent scroll-related issues on desktop
-/// 
+///
 /// WIDGET HIERARCHY:
 /// StockAdjustmentModal (Dialog)
 ///   ├── Header (Title + Close)
@@ -43,7 +43,7 @@ class _StockAdjustmentModalState extends State<StockAdjustmentModal> {
   bool _isAddMode = true; // true = Add, false = Reduce
   final TextEditingController _quantityController = TextEditingController();
   String? _selectedReason;
-  
+
   final List<String> _addReasons = [
     'Purchase Order',
     'Stock Return',
@@ -51,7 +51,7 @@ class _StockAdjustmentModalState extends State<StockAdjustmentModal> {
     'Inventory Correction',
     'Opening Balance',
   ];
-  
+
   final List<String> _reduceReasons = [
     'Sales Order',
     'Damaged Goods',
@@ -62,13 +62,14 @@ class _StockAdjustmentModalState extends State<StockAdjustmentModal> {
   ];
 
   double get _quantity => double.tryParse(_quantityController.text) ?? 0;
-  double get _newStock => _isAddMode 
-      ? widget.currentStock + _quantity 
+  double get _newStock => _isAddMode
+      ? widget.currentStock + _quantity
       : widget.currentStock - _quantity;
-  
-  bool get _isValid => _quantity > 0 && 
-                       _selectedReason != null && 
-                       (_isAddMode || _quantity <= widget.currentStock);
+
+  bool get _isValid =>
+      _quantity > 0 &&
+      _selectedReason != null &&
+      (_isAddMode || _quantity <= widget.currentStock);
 
   @override
   void dispose() {
@@ -78,12 +79,12 @@ class _StockAdjustmentModalState extends State<StockAdjustmentModal> {
 
   void _handleConfirm() {
     if (!_isValid) return;
-    
+
     // final provider = Provider.of<InventoryProvider>(context, listen: false);
-    
+
     // Create transaction record
     final transactionType = _isAddMode ? 'purchase' : 'sale';
-    
+
     // TODO: Call provider method to record transaction
     // provider.addTransaction(
     //   itemId: widget.item.id,
@@ -91,7 +92,7 @@ class _StockAdjustmentModalState extends State<StockAdjustmentModal> {
     //   quantity: _quantity,
     //   reason: _selectedReason!,
     // );
-    
+
     Navigator.of(context).pop({
       'success': true,
       'type': transactionType,
@@ -112,7 +113,7 @@ class _StockAdjustmentModalState extends State<StockAdjustmentModal> {
           children: [
             // Header
             _buildHeader(),
-            
+
             // Content (Scrollable)
             Expanded(
               child: SingleChildScrollView(
@@ -135,7 +136,7 @@ class _StockAdjustmentModalState extends State<StockAdjustmentModal> {
                 ),
               ),
             ),
-            
+
             // Fixed Footer
             _buildFooter(),
           ],
@@ -158,7 +159,7 @@ class _StockAdjustmentModalState extends State<StockAdjustmentModal> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: const Color(0xFF3B82F6).withOpacity(0.1),
+              color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(
@@ -206,11 +207,16 @@ class _StockAdjustmentModalState extends State<StockAdjustmentModal> {
             ),
           ),
           const SizedBox(height: 8),
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
               _buildInfoChip('SKU: ${widget.item.sku}'),
-              const SizedBox(width: 8),
               _buildInfoChip('Category: ${widget.item.category}'),
+              if (widget.item.brand != null && widget.item.brand!.isNotEmpty)
+                _buildInfoChip('Brand: ${widget.item.brand}'),
+              if (widget.item.hsn != null && widget.item.hsn!.isNotEmpty)
+                _buildInfoChip('HSN: ${widget.item.hsn}'),
             ],
           ),
         ],
@@ -322,7 +328,7 @@ class _StockAdjustmentModalState extends State<StockAdjustmentModal> {
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   ),
@@ -421,7 +427,7 @@ class _StockAdjustmentModalState extends State<StockAdjustmentModal> {
 
   Widget _buildReasonDropdown() {
     final reasons = _isAddMode ? _addReasons : _reduceReasons;
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -464,7 +470,8 @@ class _StockAdjustmentModalState extends State<StockAdjustmentModal> {
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 2),
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
           ),
           hint: Text(
             'Select a reason',
@@ -490,21 +497,25 @@ class _StockAdjustmentModalState extends State<StockAdjustmentModal> {
 
   Widget _buildStockPreview() {
     if (_quantity == 0) return const SizedBox.shrink();
-    
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            (_isAddMode ? const Color(0xFF10B981) : const Color(0xFFEF4444)).withOpacity(0.1),
-            (_isAddMode ? const Color(0xFF10B981) : const Color(0xFFEF4444)).withOpacity(0.05),
+            (_isAddMode ? const Color(0xFF10B981) : const Color(0xFFEF4444))
+                .withValues(alpha: 0.1),
+            (_isAddMode ? const Color(0xFF10B981) : const Color(0xFFEF4444))
+                .withValues(alpha: 0.05),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: (_isAddMode ? const Color(0xFF10B981) : const Color(0xFFEF4444)).withOpacity(0.3),
+          color:
+              (_isAddMode ? const Color(0xFF10B981) : const Color(0xFFEF4444))
+                  .withValues(alpha: 0.3),
           width: 2,
         ),
       ),
@@ -514,7 +525,9 @@ class _StockAdjustmentModalState extends State<StockAdjustmentModal> {
             children: [
               Icon(
                 Icons.preview,
-                color: _isAddMode ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                color: _isAddMode
+                    ? const Color(0xFF10B981)
+                    : const Color(0xFFEF4444),
                 size: 20,
               ),
               const SizedBox(width: 8),
@@ -539,7 +552,9 @@ class _StockAdjustmentModalState extends State<StockAdjustmentModal> {
               ),
               Icon(
                 _isAddMode ? Icons.arrow_forward : Icons.arrow_forward,
-                color: _isAddMode ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                color: _isAddMode
+                    ? const Color(0xFF10B981)
+                    : const Color(0xFFEF4444),
                 size: 32,
               ),
               _buildPreviewValue(
@@ -611,7 +626,9 @@ class _StockAdjustmentModalState extends State<StockAdjustmentModal> {
                   fontSize: isHighlight ? 32 : 24,
                   fontWeight: FontWeight.w700,
                   color: isHighlight
-                      ? (_isAddMode ? const Color(0xFF10B981) : const Color(0xFFEF4444))
+                      ? (_isAddMode
+                          ? const Color(0xFF10B981)
+                          : const Color(0xFFEF4444))
                       : const Color(0xFF0F172A),
                 ),
               ),
@@ -671,8 +688,8 @@ class _StockAdjustmentModalState extends State<StockAdjustmentModal> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
-                backgroundColor: _isAddMode 
-                    ? const Color(0xFF10B981) 
+                backgroundColor: _isAddMode
+                    ? const Color(0xFF10B981)
                     : const Color(0xFFEF4444),
                 disabledBackgroundColor: Colors.grey.shade300,
                 elevation: 0,

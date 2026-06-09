@@ -10,7 +10,10 @@ import '../models/update_info.dart';
 class UpdateService {
   // TODO: Replace with your actual update server URL
   static const String updateServerUrl = 'https://your-server.com/api/updates';
-  static const String currentVersion = '1.0.0'; // Update this with each release
+  static const String currentVersion = String.fromEnvironment(
+    'APP_VERSION',
+    defaultValue: '1.1.0',
+  );
   
   /// Check if updates are available
   static Future<UpdateInfo?> checkForUpdates() async {

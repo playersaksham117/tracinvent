@@ -474,7 +474,7 @@ class _StockTransferScreenState extends State<StockTransferScreen> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
+                    color: color.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Icon(Icons.location_on, color: color, size: 20),

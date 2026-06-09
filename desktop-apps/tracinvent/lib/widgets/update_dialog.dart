@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/update_provider.dart';
-import '../services/github_update_service.dart';
 
 /// Show update dialog
 Future<void> showUpdateDialog(BuildContext context) async {
@@ -403,7 +402,7 @@ class UpdateBanner extends StatelessWidget {
           decoration: BoxDecoration(
             gradient: LinearGradient(colors: [Colors.blue.shade600, Colors.blue.shade800]),
             borderRadius: BorderRadius.circular(12),
-            boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))],
+            boxShadow: [BoxShadow(color: Colors.blue.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 4))],
           ),
           child: Row(
             children: [
@@ -414,7 +413,7 @@ class UpdateBanner extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text('Update Available!', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                    Text('Version ${provider.availableUpdate!.tagName} is ready to download', style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 13)),
+                    Text('Version ${provider.availableUpdate!.tagName} is ready to download', style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 13)),
                   ],
                 ),
               ),

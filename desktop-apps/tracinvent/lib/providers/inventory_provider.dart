@@ -1,8 +1,9 @@
 import 'package:flutter/foundation.dart';
 import '../models/inventory_item.dart';
 import '../models/stock.dart';
-import '../services/database_service.dart';
-import 'package:uuid/uuid.dart';
+import '../services/unified_database_manager.dart';
+import '../services/stock_control_service.dart';
+import '../services/sync_queue_service.dart';
 
 class InventoryProvider with ChangeNotifier {
   List<InventoryItem> _items = [];
@@ -35,7 +36,7 @@ class InventoryProvider with ChangeNotifier {
   }
 
   Future<void> loadInventoryItems() async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     final List<Map<String, dynamic>> maps = await db.query('inventory_items');
     _items = maps.map((map) => InventoryItem.fromMap(map)).toList();
     await _calculateTotalStocks();
@@ -43,7 +44,7 @@ class InventoryProvider with ChangeNotifier {
   }
 
   Future<void> _calculateTotalStocks() async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     _totalStockByItem.clear();
     
     for (var item in _items) {
@@ -62,11 +63,17 @@ class InventoryProvider with ChangeNotifier {
   Future<void> addInventoryItem(InventoryItem item) async {
     try {
       print('Adding inventory item: ${item.name}');
-      final db = await DatabaseService.database;
+      final db = await DatabaseManager.instance.database;
       print('Database obtained');
       final itemMap = item.toMap();
       print('Item map: $itemMap');
       await db.insert('inventory_items', itemMap);
+      await trackMutation(
+        tableName: 'inventory_items',
+        recordId: item.id,
+        operation: 'upsert',
+        payload: itemMap,
+      );
       print('Item inserted into database');
       await loadInventoryItems();
       print('Inventory items reloaded, total items: ${_items.length}');
@@ -76,25 +83,64 @@ class InventoryProvider with ChangeNotifier {
     }
   }
 
+  /// Bulk import items with callback for progress updates
+  /// Much faster than adding items one by one
+  Future<void> bulkImportInventoryItems(
+    List<InventoryItem> items, {
+    Function(int progress, int total)? onProgress,
+  }) async {
+    if (items.isEmpty) return;
+
+    try {
+      final db = await DatabaseManager.instance.database;
+      
+      await db.transaction((txn) async {
+        for (int i = 0; i < items.length; i++) {
+          await txn.insert('inventory_items', items[i].toMap());
+          onProgress?.call(i + 1, items.length);
+        }
+      });
+      
+      // Load all items once after bulk import
+      await loadInventoryItems();
+      print('Bulk imported ${items.length} inventory items');
+    } catch (e) {
+      print('Error bulk importing inventory items: $e');
+      rethrow;
+    }
+  }
+
   Future<void> updateInventoryItem(InventoryItem item) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     await db.update(
       'inventory_items',
       item.toMap(),
       where: 'id = ?',
       whereArgs: [item.id],
     );
+    await trackMutation(
+      tableName: 'inventory_items',
+      recordId: item.id,
+      operation: 'upsert',
+      payload: item.toMap(),
+    );
     await loadInventoryItems();
   }
 
   Future<void> deleteInventoryItem(String id) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     await db.delete('inventory_items', where: 'id = ?', whereArgs: [id]);
+    await trackMutation(
+      tableName: 'inventory_items',
+      recordId: id,
+      operation: 'delete',
+      payload: {'id': id},
+    );
     await loadInventoryItems();
   }
 
   Future<void> loadStocks([String? warehouseId]) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     List<Map<String, dynamic>> maps;
     
     if (warehouseId != null) {
@@ -108,54 +154,44 @@ class InventoryProvider with ChangeNotifier {
   }
 
   Future<void> addTransaction(Transaction transaction, bool isIncoming) async {
-    final db = await DatabaseService.database;
-    
+    final db = await DatabaseManager.instance.database;
+
     await db.transaction((txn) async {
-      // Insert transaction
       await txn.insert('transactions', transaction.toMap());
-      
-      // Update stock
-      final stockQuery = await txn.query(
-        'stocks',
-        where: 'itemId = ? AND warehouseId = ? AND cellId ${transaction.locationId != null ? "= ?" : "IS NULL"}',
-        whereArgs: transaction.locationId != null 
-          ? [transaction.itemId, transaction.warehouseId, transaction.locationId]
-          : [transaction.itemId, transaction.warehouseId],
+      await trackMutation(
+        tableName: 'transactions',
+        recordId: transaction.id,
+        operation: 'upsert',
+        payload: transaction.toMap(),
+        txn: txn,
       );
-      
-      if (stockQuery.isNotEmpty) {
-        final currentStock = Stock.fromMap(stockQuery.first);
-        final newQuantity = isIncoming 
-          ? currentStock.quantity + transaction.quantity
-          : currentStock.quantity - transaction.quantity;
-          
-        await txn.update(
-          'stocks',
-          {'quantity': newQuantity, 'lastUpdated': DateTime.now().toIso8601String()},
-          where: 'id = ?',
-          whereArgs: [currentStock.id],
-        );
-      } else {
-        // Create new stock entry
-        final newStock = Stock(
-          id: const Uuid().v4(),
+
+      if (isIncoming) {
+        await StockControlService.stockIn(
+          txn: txn,
           itemId: transaction.itemId,
           warehouseId: transaction.warehouseId,
+          quantity: transaction.quantity,
           cellId: transaction.locationId,
-          quantity: isIncoming ? transaction.quantity : -transaction.quantity,
-          lastUpdated: DateTime.now(),
         );
-        await txn.insert('stocks', newStock.toMap());
+      } else {
+        await StockControlService.stockOut(
+          txn: txn,
+          itemId: transaction.itemId,
+          warehouseId: transaction.warehouseId,
+          quantity: transaction.quantity,
+          cellId: transaction.locationId,
+        );
       }
     });
-    
+
     await loadInventoryItems();
     await loadStocks();
     notifyListeners();
   }
 
   Future<void> loadTransactions({String? itemId, String? warehouseId}) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     List<Map<String, dynamic>> maps;
     
     if (itemId != null) {
@@ -172,7 +208,7 @@ class InventoryProvider with ChangeNotifier {
 
   /// Load daily stats for purchases and sales
   Future<void> loadDailyStats() async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     final now = DateTime.now();
     final startOfToday = DateTime(now.year, now.month, now.day);
     
@@ -226,7 +262,7 @@ class InventoryProvider with ChangeNotifier {
 
   /// Load monthly stats for purchases and sales
   Future<void> loadMonthlyStats() async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     final now = DateTime.now();
     final startOfMonth = DateTime(now.year, now.month, 1);
     
@@ -280,7 +316,7 @@ class InventoryProvider with ChangeNotifier {
 
   /// Get stock by cell
   Future<List<Map<String, dynamic>>> getStockByCell(String cellId) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     
     final results = await db.rawQuery('''
       SELECT 
@@ -307,7 +343,7 @@ class InventoryProvider with ChangeNotifier {
 
   /// Get transactions for a specific date
   Future<List<Map<String, dynamic>>> getTransactionsByDate(DateTime date) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     final startOfDay = DateTime(date.year, date.month, date.day);
     
     final results = await db.rawQuery('''
@@ -346,7 +382,7 @@ class InventoryProvider with ChangeNotifier {
 
   /// Get stock location summary
   Future<List<Map<String, dynamic>>> getStockLocationSummary(String warehouseId) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     
     final results = await db.rawQuery('''
       SELECT 

@@ -12,6 +12,8 @@ class InventoryItem {
   final double costPrice;
   final double sellingPrice;
   final String? description;
+  final String? hsn;
+  final String? brand;
   final DateTime createdAt;
   final DateTime updatedAt;
   final double totalQuantity;
@@ -30,6 +32,8 @@ class InventoryItem {
     required this.costPrice,
     required this.sellingPrice,
     this.description,
+    this.hsn,
+    this.brand,
     required this.createdAt,
     required this.updatedAt,
     this.totalQuantity = 0,
@@ -50,6 +54,8 @@ class InventoryItem {
       'costPrice': costPrice,
       'sellingPrice': sellingPrice,
       'description': description,
+      'hsn': hsn,
+      'brand': brand,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };
@@ -68,6 +74,8 @@ class InventoryItem {
       costPrice: map['costPrice'],
       sellingPrice: map['sellingPrice'],
       description: map['description'],
+      hsn: map['hsn'],
+      brand: map['brand'],
       createdAt: DateTime.parse(map['createdAt']),
       updatedAt: DateTime.parse(map['updatedAt']),
     );

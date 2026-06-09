@@ -1,5 +1,5 @@
 import 'package:uuid/uuid.dart';
-import '../services/database_service.dart';
+import '../services/unified_database_manager.dart';
 import '../models/stock_movement.dart';
 import '../models/inventory_item.dart';
 import '../models/location.dart';
@@ -29,7 +29,7 @@ class StockOperationsService {
       throw Exception('Quantity must be greater than zero');
     }
 
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     final now = DateTime.now();
     const uuid = Uuid();
 
@@ -136,7 +136,7 @@ class StockOperationsService {
       throw Exception('Quantity must be greater than zero');
     }
 
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     final now = DateTime.now();
     const uuid = Uuid();
 
@@ -246,7 +246,7 @@ class StockOperationsService {
       throw Exception('Quantity must be greater than zero');
     }
 
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     final now = DateTime.now();
     const uuid = Uuid();
 
@@ -439,7 +439,7 @@ class StockOperationsService {
 
   /// Get stock locations for an item across all warehouses
   static Future<List<Map<String, dynamic>>> getItemStockLocations(String itemId) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     
     final results = await db.rawQuery('''
       SELECT 
@@ -459,7 +459,7 @@ class StockOperationsService {
 
   /// Get total stock for an item across all locations
   static Future<double> getTotalStockForItem(String itemId) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     
     final result = await db.rawQuery('''
       SELECT COALESCE(SUM(quantity), 0) as total
@@ -478,7 +478,7 @@ class StockOperationsService {
     DateTime? endDate,
     int limit = 100,
   }) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     
     String query = 'SELECT * FROM stock_movements WHERE 1=1';
     List<dynamic> args = [];
@@ -515,7 +515,7 @@ class StockOperationsService {
     required String itemId,
     required String binId,
   }) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     
     final results = await db.query(
       'stocks',
@@ -541,7 +541,7 @@ class StockOperationsService {
 
   /// Get low stock items (below reorder level)
   static Future<List<Map<String, dynamic>>> getLowStockItems() async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     
     final results = await db.rawQuery('''
       SELECT 
@@ -565,7 +565,7 @@ class StockOperationsService {
 
   /// Get dead stock items (no movement in X days)
   static Future<List<Map<String, dynamic>>> getDeadStock({int daysThreshold = 90}) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     final cutoffDate = DateTime.now().subtract(Duration(days: daysThreshold));
     
     final results = await db.rawQuery('''

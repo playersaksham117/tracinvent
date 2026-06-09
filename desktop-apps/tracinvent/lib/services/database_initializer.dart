@@ -71,6 +71,7 @@ class DatabaseInitializer {
         minStockLevel REAL DEFAULT 0,
         reorderQuantity REAL DEFAULT 0,
         taxRate REAL DEFAULT 0,
+        hsn TEXT,
         supplier TEXT,
         brand TEXT,
         imageUrl TEXT,
@@ -148,6 +149,61 @@ class DatabaseInitializer {
       )
     ''');
 
+    // Batch tracking table
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS batch_info (
+        id TEXT PRIMARY KEY,
+        itemId TEXT NOT NULL,
+        batchNumber TEXT NOT NULL,
+        manufacturingDate TEXT,
+        expiryDate TEXT,
+        quantity REAL NOT NULL DEFAULT 0,
+        costPrice REAL NOT NULL DEFAULT 0,
+        warehouseId TEXT NOT NULL,
+        cellId TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        FOREIGN KEY (itemId) REFERENCES inventory_items (id) ON DELETE CASCADE,
+        FOREIGN KEY (warehouseId) REFERENCES warehouses (id) ON DELETE CASCADE,
+        FOREIGN KEY (cellId) REFERENCES cells (id) ON DELETE SET NULL,
+        UNIQUE(itemId, batchNumber, warehouseId, cellId)
+      )
+    ''');
+
+    // Stock adjustments table
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS stock_adjustments (
+        id TEXT PRIMARY KEY,
+        itemId TEXT NOT NULL,
+        itemName TEXT NOT NULL,
+        itemSku TEXT NOT NULL,
+        warehouseId TEXT NOT NULL,
+        warehouseName TEXT NOT NULL,
+        cellId TEXT,
+        cellName TEXT,
+        batchNumber TEXT,
+        expiryDate TEXT,
+        quantityBefore REAL NOT NULL,
+        quantityAdjusted REAL NOT NULL,
+        quantityAfter REAL NOT NULL,
+        adjustmentType TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'PND',
+        reason TEXT NOT NULL,
+        referenceDocument TEXT,
+        notes TEXT,
+        createdBy TEXT NOT NULL,
+        approvedBy TEXT,
+        createdAt TEXT NOT NULL,
+        approvedAt TEXT,
+        updatedAt TEXT NOT NULL,
+        FOREIGN KEY (itemId) REFERENCES inventory_items (id) ON DELETE CASCADE,
+        FOREIGN KEY (warehouseId) REFERENCES warehouses (id) ON DELETE CASCADE,
+        FOREIGN KEY (cellId) REFERENCES cells (id) ON DELETE SET NULL,
+        FOREIGN KEY (createdBy) REFERENCES users (id),
+        FOREIGN KEY (approvedBy) REFERENCES users (id)
+      )
+    ''');
+
     // Create indexes for better performance
     await _createIndexes(db);
 
@@ -191,6 +247,21 @@ class DatabaseInitializer {
     await db.execute('CREATE INDEX IF NOT EXISTS idx_movements_from_warehouse ON stock_movements(fromWarehouseId)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_movements_to_warehouse ON stock_movements(toWarehouseId)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_movements_date ON stock_movements(movedAt)');
+
+    // Batch tracking indexes
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_batch_item ON batch_info(itemId)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_batch_warehouse ON batch_info(warehouseId)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_batch_number ON batch_info(batchNumber)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_batch_expiry ON batch_info(expiryDate)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_batch_location ON batch_info(warehouseId, cellId)');
+
+    // Stock adjustment indexes
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_adjustment_item ON stock_adjustments(itemId)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_adjustment_warehouse ON stock_adjustments(warehouseId)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_adjustment_status ON stock_adjustments(status)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_adjustment_type ON stock_adjustments(adjustmentType)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_adjustment_date ON stock_adjustments(createdAt)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_adjustment_creator ON stock_adjustments(createdBy)');
   }
 
   /// Insert sample data for testing

@@ -76,7 +76,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF2563EB).withOpacity(0.1),
+                          color: const Color(0xFF2563EB).withValues(alpha: 0.1),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
@@ -97,12 +97,29 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Sign in to your TracInvent account',
+                        'Sign in with your email or user ID',
                         style: TextStyle(
                           fontSize: 14,
                           color: Colors.grey.shade600,
                         ),
                         textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFBFDBFE)),
+                        ),
+                        child: const Text(
+                          'Default admin: admin@123 / admin123',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF1E40AF),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
                       const SizedBox(height: 32),
 
@@ -111,7 +128,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
                         decoration: InputDecoration(
-                          labelText: 'Email',
+                          labelText: 'Email or User ID',
                           prefixIcon: const Icon(Icons.email_outlined),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -121,10 +138,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         validator: (value) {
                           if (value == null || value.isEmpty) {
-                            return 'Please enter your email';
-                          }
-                          if (!value.contains('@')) {
-                            return 'Please enter a valid email';
+                            return 'Please enter your email or user ID';
                           }
                           return null;
                         },

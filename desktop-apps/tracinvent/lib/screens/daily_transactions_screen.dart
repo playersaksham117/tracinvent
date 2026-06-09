@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/warehouse_provider.dart';
-import '../services/database_service.dart';
+import '../services/unified_database_manager.dart';
 
 /// Screen showing daily transaction logs
 /// Displays purchases, sales, transfers, and adjustments per day
@@ -36,7 +36,7 @@ class _DailyTransactionsScreenState extends State<DailyTransactionsScreen> {
   Future<void> _loadTransactions() async {
     setState(() => _isLoading = true);
     
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     
     final startOfDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
     
@@ -165,7 +165,7 @@ class _DailyTransactionsScreenState extends State<DailyTransactionsScreen> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF6366F1).withOpacity(0.1),
+                  color: const Color(0xFF6366F1).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(Icons.calendar_today, color: Color(0xFF6366F1), size: 24),
@@ -187,7 +187,7 @@ class _DailyTransactionsScreenState extends State<DailyTransactionsScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF6366F1).withOpacity(0.1),
+                          color: const Color(0xFF6366F1).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: const Text(
@@ -284,7 +284,7 @@ class _DailyTransactionsScreenState extends State<DailyTransactionsScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: const Color(0xFF2563EB).withOpacity(0.1),
+                color: const Color(0xFF2563EB).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -445,7 +445,7 @@ class _DailyTransactionsScreenState extends State<DailyTransactionsScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: color, size: 24),
@@ -577,7 +577,7 @@ class _DailyTransactionsScreenState extends State<DailyTransactionsScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2563EB).withOpacity(0.1),
+                  color: const Color(0xFF2563EB).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -650,7 +650,7 @@ class _DailyTransactionsScreenState extends State<DailyTransactionsScreen> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: color, size: 20),
@@ -668,7 +668,7 @@ class _DailyTransactionsScreenState extends State<DailyTransactionsScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: color.withOpacity(0.1),
+                        color: color.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(

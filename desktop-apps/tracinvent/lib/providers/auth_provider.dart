@@ -3,13 +3,14 @@ import '../services/auth_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   final AuthService _authService = AuthService();
-  
+
   bool _isLoggedIn = false;
   bool _isLoading = true;
   Map<String, String>? _currentUser;
   String? _errorMessage;
   bool _pinEnabled = false;
   String? _savedUserId;
+  bool _needsPinSetup = false;
 
   bool get isLoggedIn => _isLoggedIn;
   bool get isLoading => _isLoading;
@@ -17,6 +18,7 @@ class AuthProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   bool get pinEnabled => _pinEnabled;
   String? get savedUserId => _savedUserId;
+  bool get needsPinSetup => _needsPinSetup;
   bool get isAdmin => _currentUser?['role'] == 'admin';
   String get userId => _currentUser?['id'] ?? '';
 
@@ -32,9 +34,14 @@ class AuthProvider extends ChangeNotifier {
     _isLoggedIn = await _authService.isLoggedIn();
     _pinEnabled = await _authService.isPinEnabled();
     _savedUserId = await _authService.getSavedUserId();
-    
+
     if (_isLoggedIn) {
       _currentUser = await _authService.getCurrentUser();
+      if (_currentUser != null) {
+        final hasPin = await _authService.currentUserHasPinInDb(_currentUser!['id']!);
+        final skipped = await _authService.isPinSetupSkipped();
+        _needsPinSetup = !hasPin && !skipped;
+      }
     }
 
     _isLoading = false;
@@ -49,14 +56,15 @@ class AuthProvider extends ChangeNotifier {
 
     if (result['success'] == true) {
       _isLoggedIn = true;
-      _currentUser = result['user'] as Map<String, String>?;
+      _currentUser = Map<String, String>.from(result['user'] as Map);
+      _needsPinSetup = false;
       notifyListeners();
       return true;
-    } else {
-      _errorMessage = result['message'] as String?;
-      notifyListeners();
-      return false;
     }
+
+    _errorMessage = result['message'] as String?;
+    notifyListeners();
+    return false;
   }
 
   Future<bool> login(String email, String password) async {
@@ -67,14 +75,23 @@ class AuthProvider extends ChangeNotifier {
 
     if (result['success'] == true) {
       _isLoggedIn = true;
-      _currentUser = result['user'] as Map<String, String>?;
+      _currentUser = Map<String, String>.from(result['user'] as Map);
+      _pinEnabled = await _authService.isPinEnabled();
+      _savedUserId = _currentUser?['id'];
+
+      if (_currentUser != null) {
+        final hasPin = await _authService.currentUserHasPinInDb(_currentUser!['id']!);
+        final skipped = await _authService.isPinSetupSkipped();
+        _needsPinSetup = !hasPin && !skipped;
+      }
+
       notifyListeners();
       return true;
-    } else {
-      _errorMessage = result['message'] as String?;
-      notifyListeners();
-      return false;
     }
+
+    _errorMessage = result['message'] as String?;
+    notifyListeners();
+    return false;
   }
 
   Future<bool> signup(String name, String email, String password) async {
@@ -85,16 +102,40 @@ class AuthProvider extends ChangeNotifier {
 
     if (result['success'] == true) {
       _isLoggedIn = true;
-      _currentUser = result['user'] as Map<String, String>?;
+      _currentUser = Map<String, String>.from(result['user'] as Map);
       _pinEnabled = false;
       _savedUserId = _currentUser?['id'];
+      _needsPinSetup = true;
       notifyListeners();
       return true;
-    } else {
-      _errorMessage = result['message'] as String?;
-      notifyListeners();
-      return false;
     }
+
+    _errorMessage = result['message'] as String?;
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> setPin(String pin) async {
+    if (_currentUser == null) return false;
+
+    final result = await _authService.setPin(_currentUser!['id']!, pin);
+
+    if (result['success'] == true) {
+      _pinEnabled = true;
+      _needsPinSetup = false;
+      notifyListeners();
+      return true;
+    }
+
+    _errorMessage = result['message'] as String?;
+    notifyListeners();
+    return false;
+  }
+
+  Future<void> skipPinSetup() async {
+    await _authService.markPinSetupSkipped();
+    _needsPinSetup = false;
+    notifyListeners();
   }
 
   Future<bool> enablePin(String userId, String pin) async {
@@ -105,19 +146,18 @@ class AuthProvider extends ChangeNotifier {
     }
 
     final result = await _authService.enablePin(userId, pin);
-    
+
     if (result['success'] == true) {
-      // Refresh PIN status if it's the current user
       if (userId == _currentUser?['id']) {
         _pinEnabled = true;
       }
       notifyListeners();
       return true;
-    } else {
-      _errorMessage = result['message'] as String?;
-      notifyListeners();
-      return false;
     }
+
+    _errorMessage = result['message'] as String?;
+    notifyListeners();
+    return false;
   }
 
   Future<bool> disablePin(String userId) async {
@@ -128,30 +168,28 @@ class AuthProvider extends ChangeNotifier {
     }
 
     final result = await _authService.disablePin(userId);
-    
+
     if (result['success'] == true) {
-      // Refresh PIN status if it's the current user
       if (userId == _currentUser?['id']) {
         _pinEnabled = false;
       }
       notifyListeners();
       return true;
-    } else {
-      _errorMessage = result['message'] as String?;
-      notifyListeners();
-      return false;
     }
+
+    _errorMessage = result['message'] as String?;
+    notifyListeners();
+    return false;
   }
 
   Future<List<Map<String, dynamic>>> getAllUsers() async {
     if (!isAdmin) return [];
-    return await _authService.getAllUsers();
+    return _authService.getAllUsers();
   }
 
   Future<void> logout() async {
     await _authService.logout();
     _isLoggedIn = false;
-    // Keep currentUser data for PIN re-login
     notifyListeners();
   }
 
@@ -161,6 +199,7 @@ class AuthProvider extends ChangeNotifier {
     _currentUser = null;
     _pinEnabled = false;
     _savedUserId = null;
+    _needsPinSetup = false;
     notifyListeners();
   }
 

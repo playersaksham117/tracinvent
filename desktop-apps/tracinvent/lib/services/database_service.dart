@@ -1,10 +1,40 @@
+import 'dart:io';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:flutter/foundation.dart';
 import 'database_initializer.dart';
 
 class DatabaseService {
   static Database? _database;
+  static String? _databasePath;
+  
+  /// Get the database path - uses portable path (same folder as exe) in release mode
+  static Future<String> getDatabasePath() async {
+    if (_databasePath != null) return _databasePath!;
+    
+    // In release mode on desktop, use the executable's directory for portable database
+    if (!kDebugMode && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      final exePath = Platform.resolvedExecutable;
+      final exeDir = File(exePath).parent.path;
+      _databasePath = join(exeDir, 'data', 'tracinvent.db');
+      
+      // Ensure data directory exists
+      final dataDir = Directory(join(exeDir, 'data'));
+      if (!await dataDir.exists()) {
+        await dataDir.create(recursive: true);
+      }
+      
+      debugPrint('Using portable database path: $_databasePath');
+    } else {
+      // In debug mode or non-desktop, use documents directory
+      final directory = await getApplicationDocumentsDirectory();
+      _databasePath = join(directory.path, 'tracinvent.db');
+      debugPrint('Using documents database path: $_databasePath');
+    }
+    
+    return _databasePath!;
+  }
   
   static Future<Database> get database async {
     if (_database != null) return _database!;
@@ -13,12 +43,16 @@ class DatabaseService {
   }
 
   static Future<Database> _initDatabase() async {
-    final directory = await getApplicationDocumentsDirectory();
-    final path = join(directory.path, 'tracinvent.db');
+    final path = await getDatabasePath();
+    
+    // Check if database already exists
+    final dbFile = File(path);
+    final dbExists = await dbFile.exists();
+    debugPrint('Database exists: $dbExists at $path');
     
     return await openDatabase(
       path,
-      version: 10, // Incremented version to ensure stock_transfers and stock_movements tables exist
+      version: 11, // Added hsn and brand columns to inventory_items
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -323,6 +357,29 @@ class DatabaseService {
       }
       
       print('Database upgrade to version 10 completed');
+    }
+
+    if (oldVersion < 11) {
+      print('Upgrading database from version $oldVersion to 11...');
+      print('Adding hsn and brand columns to inventory_items');
+      
+      // Add hsn column
+      try {
+        await db.execute('ALTER TABLE inventory_items ADD COLUMN hsn TEXT');
+        print('Added hsn column to inventory_items table');
+      } catch (e) {
+        print('hsn column may already exist: $e');
+      }
+      
+      // Add brand column (may already exist from initial schema)
+      try {
+        await db.execute('ALTER TABLE inventory_items ADD COLUMN brand TEXT');
+        print('Added brand column to inventory_items table');
+      } catch (e) {
+        print('brand column may already exist: $e');
+      }
+      
+      print('Database upgrade to version 11 completed');
     }
   }
 

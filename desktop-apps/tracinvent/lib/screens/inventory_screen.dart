@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:csv/csv.dart';
+import 'dart:io';
 import '../providers/inventory_provider.dart';
 import '../providers/settings_provider.dart';
 import '../models/inventory_item.dart';
@@ -25,8 +28,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
         final categories = ['All', ...inventoryProvider.items.map((i) => i.category).toSet()];
         
         var filteredItems = inventoryProvider.items.where((item) {
-          final matchesSearch = item.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-              item.sku.toLowerCase().contains(_searchQuery.toLowerCase());
+          final query = _searchQuery.toLowerCase().trim();
+          final barcode = (item.barcode ?? '').toLowerCase();
+          final matchesSearch = item.name.toLowerCase().contains(query) ||
+              item.sku.toLowerCase().contains(query) ||
+              barcode.contains(query);
           final matchesCategory = _selectedCategory == 'All' || item.category == _selectedCategory;
           return matchesSearch && matchesCategory;
         }).toList();
@@ -53,6 +59,17 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     ),
                   ),
                   const Spacer(),
+                  OutlinedButton.icon(
+                    onPressed: () => _importFromCSV(context),
+                    icon: const Icon(Icons.upload_file),
+                    label: const Text('Import CSV'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      foregroundColor: const Color(0xFF2563EB),
+                      side: const BorderSide(color: Color(0xFF2563EB)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
                   ElevatedButton.icon(
                     onPressed: () => _showAddItemDialog(context),
                     icon: const Icon(Icons.add),
@@ -75,7 +92,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     flex: 2,
                     child: TextField(
                       decoration: InputDecoration(
-                        hintText: 'Search items...',
+                        hintText: 'Search by name, SKU, or barcode...',
                         prefixIcon: const Icon(Icons.search),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -322,6 +339,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final costPriceController = TextEditingController(text: '0');
     final sellingPriceController = TextEditingController(text: '0');
     final descriptionController = TextEditingController();
+    final hsnController = TextEditingController();
+    final brandController = TextEditingController();
     bool isAdding = false;
 
     showDialog(
@@ -376,6 +395,32 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         controller: barcodeController,
                         decoration: const InputDecoration(
                           labelText: 'Barcode',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: hsnController,
+                        decoration: const InputDecoration(
+                          labelText: 'HSN Code',
+                          hintText: 'e.g. 8471',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: TextField(
+                        controller: brandController,
+                        decoration: const InputDecoration(
+                          labelText: 'Brand',
+                          hintText: 'e.g. Samsung',
                           border: OutlineInputBorder(),
                         ),
                       ),
@@ -495,6 +540,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   costPrice: double.tryParse(costPriceController.text) ?? 0,
                   sellingPrice: double.tryParse(sellingPriceController.text) ?? 0,
                   description: descriptionController.text.isEmpty ? null : descriptionController.text,
+                  hsn: hsnController.text.isEmpty ? null : hsnController.text,
+                  brand: brandController.text.isEmpty ? null : brandController.text,
                   createdAt: DateTime.now(),
                   updatedAt: DateTime.now(),
                 );
@@ -547,6 +594,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final costPriceController = TextEditingController(text: item.costPrice.toString());
     final sellingPriceController = TextEditingController(text: item.sellingPrice.toString());
     final descriptionController = TextEditingController(text: item.description ?? '');
+    final hsnController = TextEditingController(text: item.hsn ?? '');
+    final brandController = TextEditingController(text: item.brand ?? '');
 
     showDialog(
       context: context,
@@ -668,6 +717,30 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   ],
                 ),
                 const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: hsnController,
+                        decoration: const InputDecoration(
+                          labelText: 'HSN Code',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: TextField(
+                        controller: brandController,
+                        decoration: const InputDecoration(
+                          labelText: 'Brand',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
                 TextField(
                   controller: descriptionController,
                   decoration: const InputDecoration(
@@ -709,6 +782,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 costPrice: double.tryParse(costPriceController.text) ?? item.costPrice,
                 sellingPrice: double.tryParse(sellingPriceController.text) ?? item.sellingPrice,
                 description: descriptionController.text.isEmpty ? null : descriptionController.text,
+                hsn: hsnController.text.isEmpty ? null : hsnController.text,
+                brand: brandController.text.isEmpty ? null : brandController.text,
                 createdAt: item.createdAt,
                 updatedAt: DateTime.now(),
               );
@@ -784,6 +859,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       if (item.barcode != null) _buildDetailRow('Barcode', item.barcode!),
                       _buildDetailRow('Category', item.category),
                       _buildDetailRow('Unit', item.unit),
+                      if (item.hsn != null) _buildDetailRow('HSN Code', item.hsn!),
+                      if (item.brand != null) _buildDetailRow('Brand', item.brand!),
                       if (item.description != null) _buildDetailRow('Description', item.description!),
                     ],
                   ),
@@ -1032,6 +1109,476 @@ class _InventoryScreenState extends State<InventoryScreen> {
               }
             },
             child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _importFromCSV(BuildContext context) async {
+    try {
+      // Pick CSV file
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+        dialogTitle: 'Select CSV file to import',
+      );
+
+      if (result == null || result.files.isEmpty) return;
+
+      final file = File(result.files.single.path!);
+      final csvString = await file.readAsString();
+      
+      // Parse CSV
+      List<List<dynamic>> csvData = const CsvToListConverter().convert(csvString);
+      
+      if (csvData.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('CSV file is empty')),
+          );
+        }
+        return;
+      }
+
+      // Get headers (first row)
+      final headers = csvData[0].map((h) => h.toString().toLowerCase().trim()).toList();
+      
+      // Show column mapping dialog
+      if (context.mounted) {
+        await _showColumnMappingDialog(context, headers, csvData.sublist(1));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error reading CSV: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _showColumnMappingDialog(
+    BuildContext context, 
+    List<String> headers, 
+    List<List<dynamic>> dataRows,
+  ) async {
+    // Field mappings - key is our field, value is CSV column index
+    Map<String, int?> mappings = {
+      'name': _findColumnIndex(headers, ['name', 'product name', 'item name', 'product', 'item']),
+      'sku': _findColumnIndex(headers, ['sku', 'sku_id', 'sku id', 'product code', 'code']),
+      'barcode': _findColumnIndex(headers, ['barcode', 'ean', 'ean-13', 'ean-13 code', 'ean13', 'upc']),
+      'category': _findColumnIndex(headers, ['category', 'cat', 'product category']),
+      'unit': _findColumnIndex(headers, ['unit', 'uom', 'unit of measure']),
+      'description': _findColumnIndex(headers, ['description', 'desc', 'details', 'product description', 'text']),
+      'costPrice': _findColumnIndex(headers, ['cost', 'cost price', 'purchase price', 'buying price']),
+      'sellingPrice': _findColumnIndex(headers, ['sale_price', 'selling price', 'price', 'mrp', 'sell price']),
+      'hsn': _findColumnIndex(headers, ['hsn', 'hsn code', 'hsn_code', 'hsncode', 'hsn/sac', 'hsn sac', 'hsn number']),
+      'brand': _findColumnIndex(headers, ['brand', 'brand name', 'manufacturer']),
+      'reorderLevel': _findColumnIndex(headers, ['reorder', 'reorder level', 'reorder_level', 'stock']),
+      'minStockLevel': _findColumnIndex(headers, ['min stock', 'min_stock', 'minimum stock', 'min stock level']),
+    };
+
+    final fieldLabels = {
+      'name': 'Item Name *',
+      'sku': 'SKU *',
+      'barcode': 'Barcode',
+      'category': 'Category *',
+      'unit': 'Unit *',
+      'description': 'Description',
+      'costPrice': 'Cost Price',
+      'sellingPrice': 'Selling Price',
+      'hsn': 'HSN Code',
+      'brand': 'Brand',
+      'reorderLevel': 'Reorder Level',
+      'minStockLevel': 'Min Stock Level',
+    };
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Row(
+            children: [
+              const Icon(Icons.upload_file, color: Color(0xFF2563EB)),
+              const SizedBox(width: 12),
+              const Text('Import from CSV'),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${dataRows.length} items',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.blue.shade700,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 600,
+            height: 500,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.amber.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.amber.shade700),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Map your CSV columns to inventory fields. Fields marked with * are required.',
+                          style: TextStyle(color: Colors.amber.shade800),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: mappings.keys.map((field) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 150,
+                                child: Text(
+                                  fieldLabels[field]!,
+                                  style: TextStyle(
+                                    fontWeight: fieldLabels[field]!.contains('*') 
+                                        ? FontWeight.bold 
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                              ),
+                              const Icon(Icons.arrow_forward, size: 16, color: Colors.grey),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: DropdownButtonFormField<int?>(
+                                  initialValue: mappings[field],
+                                  decoration: InputDecoration(
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    filled: true,
+                                    fillColor: Colors.grey.shade50,
+                                  ),
+                                  items: [
+                                    const DropdownMenuItem<int?>(
+                                      value: null,
+                                      child: Text('-- Not Mapped --', style: TextStyle(color: Colors.grey)),
+                                    ),
+                                    ...headers.asMap().entries.map((entry) {
+                                      return DropdownMenuItem<int?>(
+                                        value: entry.key,
+                                        child: Text(entry.value),
+                                      );
+                                    }),
+                                  ],
+                                  onChanged: (value) {
+                                    setState(() {
+                                      mappings[field] = value;
+                                    });
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+                const Divider(),
+                // Preview section
+                const Text(
+                  'Preview (first 3 rows):',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  height: 100,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SingleChildScrollView(
+                      child: DataTable(
+                        columns: headers.map((h) => DataColumn(label: Text(h, style: const TextStyle(fontWeight: FontWeight.bold)))).toList(),
+                        rows: dataRows.take(3).map((row) {
+                          return DataRow(
+                            cells: row.map((cell) => DataCell(Text(cell.toString()))).toList(),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () async {
+                // Validate required fields are mapped
+                if (mappings['name'] == null || 
+                    mappings['sku'] == null || 
+                    mappings['category'] == null || 
+                    mappings['unit'] == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please map all required fields (Name, SKU, Category, Unit)'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+
+                Navigator.pop(context);
+                await _processCSVImport(context, mappings, dataRows);
+              },
+              icon: const Icon(Icons.check),
+              label: const Text('Import'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2563EB),
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  int? _findColumnIndex(List<String> headers, List<String> possibleNames) {
+    for (var name in possibleNames) {
+      final index = headers.indexOf(name.toLowerCase());
+      if (index != -1) return index;
+    }
+    return null;
+  }
+
+  Future<void> _processCSVImport(
+    BuildContext context,
+    Map<String, int?> mappings,
+    List<List<dynamic>> dataRows,
+  ) async {
+    final inventoryProvider = Provider.of<InventoryProvider>(context, listen: false);
+    
+    int successCount = 0;
+    int errorCount = 0;
+    int skipCount = 0;
+    List<String> errors = [];
+    
+    // Build a set of existing SKUs for O(1) lookup (much faster than list search)
+    final existingSKUs = <String>{};
+    for (final item in inventoryProvider.items) {
+      existingSKUs.add(item.sku);
+    }
+
+    // Show progress dialog with progress bar
+    final progressNotifier = ValueNotifier<String>('Validating items...');
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            ValueListenableBuilder<String>(
+              valueListenable: progressNotifier,
+              builder: (context, progress, _) => Text(progress),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      // Phase 1: Validate and collect items (without database writes)
+      final itemsToImport = <InventoryItem>[];
+      final localSKUs = <String>{...existingSKUs}; // Track SKUs including those being imported
+      
+      for (int i = 0; i < dataRows.length; i++) {
+        final row = dataRows[i];
+        
+        try {
+          // Get values from mapped columns
+          String getValue(String field) {
+            final index = mappings[field];
+            if (index == null || index >= row.length) return '';
+            return row[index]?.toString().trim() ?? '';
+          }
+
+          double getDoubleValue(String field) {
+            final value = getValue(field);
+            if (value.isEmpty) return 0.0;
+            return double.tryParse(value.replaceAll(',', '')) ?? 0.0;
+          }
+
+          final name = getValue('name');
+          final sku = getValue('sku');
+          final category = getValue('category');
+          final unit = getValue('unit');
+
+          // Skip empty rows
+          if (name.isEmpty && sku.isEmpty) {
+            skipCount++;
+            continue;
+          }
+
+          // Validate required fields
+          if (name.isEmpty || sku.isEmpty || category.isEmpty || unit.isEmpty) {
+            errorCount++;
+            errors.add('Row ${i + 2}: Missing required fields');
+            continue;
+          }
+
+          // Check for duplicate SKU (including items already in import list)
+          if (localSKUs.contains(sku)) {
+            skipCount++;
+            continue;
+          }
+
+          final item = InventoryItem(
+            id: const Uuid().v4(),
+            name: name,
+            sku: sku,
+            barcode: getValue('barcode').isEmpty ? null : getValue('barcode'),
+            category: category,
+            unit: unit.isEmpty ? 'PCS' : unit,
+            description: getValue('description').isEmpty ? null : getValue('description'),
+            costPrice: getDoubleValue('costPrice'),
+            sellingPrice: getDoubleValue('sellingPrice'),
+            reorderLevel: getDoubleValue('reorderLevel'),
+            minStockLevel: getDoubleValue('minStockLevel'),
+            hsn: getValue('hsn').isEmpty ? null : getValue('hsn'),
+            brand: getValue('brand').isEmpty ? null : getValue('brand'),
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          );
+
+          itemsToImport.add(item);
+          localSKUs.add(sku);
+          successCount++;
+        } catch (e) {
+          errorCount++;
+          errors.add('Row ${i + 2}: $e');
+        }
+      }
+
+      // Phase 2: Bulk insert all validated items
+      if (itemsToImport.isNotEmpty) {
+        progressNotifier.value = 'Importing ${itemsToImport.length} items...';
+        
+        await inventoryProvider.bulkImportInventoryItems(
+          itemsToImport,
+          onProgress: (progress, total) {
+            progressNotifier.value = 'Importing items... ($progress/$total)';
+          },
+        );
+      }
+    } catch (e) {
+      errorCount++;
+      errors.add('Bulk import error: $e');
+    }
+
+    // Close progress dialog
+    if (context.mounted) {
+      Navigator.pop(context);
+    }
+
+    // Show results
+    if (context.mounted) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(
+                successCount > 0 ? Icons.check_circle : Icons.warning,
+                color: successCount > 0 ? Colors.green : Colors.orange,
+              ),
+              const SizedBox(width: 12),
+              const Text('Import Complete'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildResultRow(Icons.check_circle, Colors.green, 'Imported', successCount),
+              _buildResultRow(Icons.skip_next, Colors.orange, 'Skipped (duplicates/empty)', skipCount),
+              _buildResultRow(Icons.error, Colors.red, 'Errors', errorCount),
+              if (errors.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                const Text('Error Details:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Container(
+                  height: 100,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: SingleChildScrollView(
+                    child: Text(
+                      errors.take(10).join('\n'),
+                      style: TextStyle(fontSize: 12, color: Colors.red.shade700),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  Widget _buildResultRow(IconData icon, Color color, String label, int count) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: color),
+          const SizedBox(width: 8),
+          Text(label),
+          const Spacer(),
+          Text(
+            count.toString(),
+            style: TextStyle(fontWeight: FontWeight.bold, color: color),
           ),
         ],
       ),

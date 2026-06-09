@@ -141,7 +141,7 @@ class _LocationPickerWidgetState extends State<LocationPickerWidget> {
                   ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
-                    value: selectedWarehouseId,
+                    initialValue: selectedWarehouseId,
                     decoration: InputDecoration(
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -174,7 +174,7 @@ class _LocationPickerWidgetState extends State<LocationPickerWidget> {
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
-                      value: selectedZoneId,
+                      initialValue: selectedZoneId,
                       decoration: InputDecoration(
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -208,7 +208,7 @@ class _LocationPickerWidgetState extends State<LocationPickerWidget> {
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
-                      value: selectedRackId,
+                      initialValue: selectedRackId,
                       decoration: InputDecoration(
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -242,7 +242,7 @@ class _LocationPickerWidgetState extends State<LocationPickerWidget> {
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
-                      value: selectedShelfId,
+                      initialValue: selectedShelfId,
                       decoration: InputDecoration(
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -276,7 +276,7 @@ class _LocationPickerWidgetState extends State<LocationPickerWidget> {
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
-                      value: selectedBinId,
+                      initialValue: selectedBinId,
                       decoration: InputDecoration(
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),

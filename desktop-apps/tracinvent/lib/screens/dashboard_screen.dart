@@ -100,6 +100,31 @@ class DashboardScreen extends StatelessWidget {
           SvgPicture.asset(
             'assets/icons/tracinvent_logo_horizontal.svg',
             height: 36,
+            placeholderBuilder: (context) => const SizedBox(
+              height: 36,
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
+            errorBuilder: (context, error, stackTrace) {
+              return Container(
+                height: 36,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFBFDBFE)),
+                ),
+                child: const Center(
+                  child: Text(
+                    'TracInvent',
+                    style: TextStyle(
+                      color: Color(0xFF1E40AF),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
           const SizedBox(width: 24),
           Container(
@@ -265,7 +290,7 @@ class DashboardScreen extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -1149,7 +1174,7 @@ class DashboardScreen extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
+            color: color.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(4),
           ),
           child: Icon(icon, size: 14, color: color),

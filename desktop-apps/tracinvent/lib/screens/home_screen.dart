@@ -3,16 +3,21 @@ import 'package:provider/provider.dart';
 import '../providers/inventory_provider.dart';
 import '../providers/warehouse_provider.dart';
 import '../providers/sync_provider.dart';
+import '../providers/navigation_provider.dart';
+import '../providers/auth_provider.dart';
+import '../providers/license_provider.dart';
+import '../widgets/feature_gate.dart';
 import 'dashboard_screen.dart';
 import 'inventory_screen.dart';
 import 'warehouses_screen.dart';
 import 'transactions_screen.dart';
 import 'reports_screen.dart';
 import 'settings_screen.dart';
-import 'stock_search_screen.dart';
 import 'stock_location_screen.dart';
 import 'daily_transactions_screen.dart';
 import 'cell_stock_view_screen.dart';
+import 'adjustment_screen.dart';
+import 'qr_barcode_scanner_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -22,19 +27,27 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _selectedIndex = 0;
-  
   final List<Widget> _screens = [
     const DashboardScreen(),
     const InventoryScreen(),
-    const StockSearchScreen(),
+    // Index kept for backward compatibility; merged with inventory.
+    const InventoryScreen(),
     const StockLocationScreen(),
     const CellStockViewScreen(),
     const DailyTransactionsScreen(),
+    const AdjustmentScreen(),
     const WarehousesScreen(),
     const TransactionsScreen(),
     const ReportsScreen(),
     const SettingsScreen(),
+    const QrBarcodeScanner(),
+    const SizedBox.shrink(), // legacy POS slot
+    const SizedBox.shrink(),
+    const SizedBox.shrink(),
+    const SizedBox.shrink(),
+    const SizedBox.shrink(),
+    const SizedBox.shrink(), // legacy mobile slots
+    const SizedBox.shrink(),
   ];
 
   @override
@@ -44,15 +57,20 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadData() async {
-    final inventoryProvider = Provider.of<InventoryProvider>(context, listen: false);
-    final warehouseProvider = Provider.of<WarehouseProvider>(context, listen: false);
-    
+    final inventoryProvider =
+        Provider.of<InventoryProvider>(context, listen: false);
+    final warehouseProvider =
+        Provider.of<WarehouseProvider>(context, listen: false);
+
     await inventoryProvider.loadInventoryItems();
     await warehouseProvider.loadWarehouses();
   }
 
   @override
   Widget build(BuildContext context) {
+    final navigationProvider = Provider.of<NavigationProvider>(context);
+    final selectedIndex = navigationProvider.selectedIndex;
+
     return Scaffold(
       body: Row(
         children: [
@@ -75,7 +93,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF2563EB).withOpacity(0.1),
+                          color: const Color(0xFF2563EB).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Icon(
@@ -108,13 +126,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 ),
-                
+
                 Divider(height: 1, color: Colors.grey.shade200),
-                
+
                 // Navigation Items
                 Expanded(
                   child: ListView(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 16),
                     children: [
                       _buildNavItem(
                         context,
@@ -130,16 +149,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         Icons.inventory,
                         'Inventory',
                       ),
-                      _buildNavItem(
-                        context,
-                        2,
-                        Icons.search_outlined,
-                        Icons.search,
-                        'Stock Search',
-                      ),
                       const SizedBox(height: 8),
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
                         child: Text(
                           'STOCK TRACKING',
                           style: TextStyle(
@@ -173,7 +186,29 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(height: 8),
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        child: Text(
+                          'ADJUSTMENTS',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey.shade500,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                      _buildNavItem(
+                        context,
+                        6,
+                        Icons.tune_outlined,
+                        Icons.tune,
+                        'Adjustments & Batches',
+                      ),
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
                         child: Text(
                           'MANAGEMENT',
                           style: TextStyle(
@@ -186,28 +221,50 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       _buildNavItem(
                         context,
-                        6,
+                        7,
                         Icons.warehouse_outlined,
                         Icons.warehouse,
                         'Warehouses',
                       ),
                       _buildNavItem(
                         context,
-                        7,
+                        8,
                         Icons.add_shopping_cart_outlined,
                         Icons.add_shopping_cart,
                         'Stock In/Out',
                       ),
                       _buildNavItem(
                         context,
-                        8,
+                        9,
                         Icons.assessment_outlined,
                         Icons.assessment,
                         'Reports',
                       ),
                       const SizedBox(height: 8),
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        child: Text(
+                          'TOOLS',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey.shade500,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                      _buildNavItem(
+                        context,
+                        11,
+                        Icons.qr_code_scanner_outlined,
+                        Icons.qr_code_2,
+                        'QR/Barcode Scanner',
+                      ),
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
                         child: Text(
                           'SYSTEM',
                           style: TextStyle(
@@ -220,7 +277,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       _buildNavItem(
                         context,
-                        9,
+                        10,
                         Icons.settings_outlined,
                         Icons.settings,
                         'Settings',
@@ -228,7 +285,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 ),
-                
+
                 // User Profile Section
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -243,7 +300,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       Consumer<SyncProvider>(
                         builder: (context, syncProvider, _) {
                           return Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
                             margin: const EdgeInsets.only(bottom: 12),
                             decoration: BoxDecoration(
                               color: syncProvider.isOnline
@@ -254,7 +312,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: Row(
                               children: [
                                 Icon(
-                                  syncProvider.isOnline ? Icons.cloud_done : Icons.cloud_off,
+                                  syncProvider.isOnline
+                                      ? Icons.cloud_done
+                                      : Icons.cloud_off,
                                   size: 16,
                                   color: syncProvider.isOnline
                                       ? const Color(0xFF10B981)
@@ -263,7 +323,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
-                                    syncProvider.isOnline ? 'Online' : 'Offline',
+                                    syncProvider.isOnline
+                                        ? 'Online'
+                                        : 'Offline',
                                     style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
@@ -275,7 +337,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                                 if (syncProvider.pendingChangesCount > 0)
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
                                       color: const Color(0xFFF59E0B),
                                       borderRadius: BorderRadius.circular(10),
@@ -289,66 +352,93 @@ class _HomeScreenState extends State<HomeScreen> {
                                       ),
                                     ),
                                   ),
-                                if (syncProvider.syncStatus == SyncStatus.syncing)
+                                if (syncProvider.syncStatus ==
+                                    SyncStatus.syncing)
                                   const SizedBox(
                                     width: 12,
                                     height: 12,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
                                   ),
                                 if (syncProvider.isOnline &&
-                                    syncProvider.syncStatus != SyncStatus.syncing)
+                                    syncProvider.syncStatus !=
+                                        SyncStatus.syncing)
                                   IconButton(
                                     icon: const Icon(Icons.sync, size: 16),
                                     padding: EdgeInsets.zero,
                                     constraints: const BoxConstraints(),
-                                    onPressed: () => syncProvider.forceSyncNow(),
+                                    onPressed: () =>
+                                        syncProvider.forceSyncNow(),
                                   ),
                               ],
                             ),
                           );
                         },
                       ),
-                      
+
                       // User Profile
-                      Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 20,
-                            backgroundColor: const Color(0xFF2563EB).withOpacity(0.1),
-                            child: const Text(
-                              'A',
-                              style: TextStyle(
-                                color: Color(0xFF2563EB),
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Admin User',
-                                  style: TextStyle(
-                                    fontSize: 14,
+                      Consumer<AuthProvider>(
+                        builder: (context, auth, _) {
+                          final name = auth.currentUser?['name'] ?? 'User';
+                          final email = auth.currentUser?['email'] ?? '';
+                          final initial = name.isNotEmpty
+                              ? name.substring(0, 1).toUpperCase()
+                              : 'U';
+
+                          return Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 20,
+                                backgroundColor:
+                                    const Color(0xFF2563EB).withValues(alpha: 0.1),
+                                child: Text(
+                                  initial,
+                                  style: const TextStyle(
+                                    color: Color(0xFF2563EB),
+                                    fontSize: 18,
                                     fontWeight: FontWeight.w600,
-                                    color: Color(0xFF0F172A),
                                   ),
                                 ),
-                                Text(
-                                  'admin@tracinvent.com',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      name,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF0F172A),
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    Text(
+                                      email,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                          ),
-                        ],
+                              ),
+                              IconButton(
+                                tooltip: 'Sign out',
+                                icon: Icon(
+                                  Icons.logout,
+                                  size: 18,
+                                  color: Colors.grey.shade600,
+                                ),
+                                onPressed: () async {
+                                  await auth.logout();
+                                },
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -356,10 +446,10 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
-          
+
           // Main Content
           Expanded(
-            child: _screens[_selectedIndex],
+            child: _screens[selectedIndex],
           ),
         ],
       ),
@@ -371,24 +461,35 @@ class _HomeScreenState extends State<HomeScreen> {
     int index,
     IconData icon,
     IconData selectedIcon,
-    String label,
-  ) {
-    final isSelected = _selectedIndex == index;
-    
+    String label, {
+    String? feature,
+  }) {
+    final navigationProvider =
+        Provider.of<NavigationProvider>(context, listen: false);
+    final license = Provider.of<LicenseProvider>(context, listen: false);
+    final isSelected = navigationProvider.selectedIndex == index;
+    final locked = feature != null && !license.canAccess(feature);
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: () {
-            setState(() => _selectedIndex = index);
+            if (locked) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(license.upgradeMessage(feature))),
+              );
+              return;
+            }
+            navigationProvider.navigateTo(index);
           },
           borderRadius: BorderRadius.circular(8),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: isSelected
-                  ? const Color(0xFF2563EB).withOpacity(0.1)
+                  ? const Color(0xFF2563EB).withValues(alpha: 0.1)
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
             ),
@@ -396,22 +497,29 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 Icon(
                   isSelected ? selectedIcon : icon,
-                  color: isSelected
-                      ? const Color(0xFF2563EB)
-                      : const Color(0xFF64748B),
+                  color: locked
+                      ? Colors.grey.shade400
+                      : isSelected
+                          ? const Color(0xFF2563EB)
+                          : const Color(0xFF64748B),
                   size: 22,
                 ),
                 const SizedBox(width: 12),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                    color: isSelected
-                        ? const Color(0xFF2563EB)
-                        : const Color(0xFF475569),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                      color: locked
+                          ? Colors.grey.shade400
+                          : isSelected
+                              ? const Color(0xFF2563EB)
+                              : const Color(0xFF475569),
+                    ),
                   ),
                 ),
+                if (locked) Icon(Icons.lock, size: 14, color: Colors.grey.shade400),
               ],
             ),
           ),

@@ -1,187 +1,151 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
-  final String baseUrl;
+  String _baseUrl;
   final http.Client _client;
-  
+  String? _authToken;
+
   ApiClient({
-    this.baseUrl = 'http://localhost:5000/api',
+    String? baseUrl,
     http.Client? client,
-  }) : _client = client ?? http.Client();
-  
-  // ========== Helper Methods ==========
-  
+  })  : _baseUrl = baseUrl ?? 'http://localhost:8000/api/v1',
+        _client = client ?? http.Client();
+
+  String get baseUrl => _baseUrl;
+
+  void setAuthToken(String? token) => _authToken = token;
+
+  void updateBaseUrl(String url) {
+    _baseUrl = url;
+    saveBaseUrl(url);
+  }
+
+  static Future<String> loadBaseUrl() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('sync_api_base_url') ?? 'http://localhost:8000/api/v1';
+  }
+
+  static Future<void> saveBaseUrl(String url) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('sync_api_base_url', url);
+  }
+
+  Map<String, String> get _headers => {
+        'Content-Type': 'application/json',
+        if (_authToken != null) 'Authorization': 'Bearer $_authToken',
+      };
+
   Future<Map<String, dynamic>> _get(String endpoint) async {
     try {
-      final response = await _client.get(
-        Uri.parse('$baseUrl$endpoint'),
-        headers: {'Content-Type': 'application/json'},
-      ).timeout(const Duration(seconds: 10));
-      
-      if (response.statusCode == 200) {
+      final response = await _client
+          .get(Uri.parse('$_baseUrl$endpoint'), headers: _headers)
+          .timeout(const Duration(seconds: 15));
+      if (response.statusCode >= 200 && response.statusCode < 300) {
         return {'success': true, 'data': jsonDecode(response.body)};
-      } else {
-        return {'success': false, 'error': 'Server error: ${response.statusCode}'};
       }
+      return {'success': false, 'error': 'Server error: ${response.statusCode}'};
     } catch (e) {
       return {'success': false, 'error': e.toString()};
     }
   }
-  
+
   Future<Map<String, dynamic>> _post(String endpoint, Map<String, dynamic> data) async {
     try {
-      final response = await _client.post(
-        Uri.parse('$baseUrl$endpoint'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(data),
-      ).timeout(const Duration(seconds: 10));
-      
-      if (response.statusCode == 200 || response.statusCode == 201) {
+      final response = await _client
+          .post(Uri.parse('$_baseUrl$endpoint'), headers: _headers, body: jsonEncode(data))
+          .timeout(const Duration(seconds: 30));
+      if (response.statusCode >= 200 && response.statusCode < 300) {
         return {'success': true, 'data': jsonDecode(response.body)};
-      } else {
-        return {'success': false, 'error': 'Server error: ${response.statusCode}'};
       }
+      return {'success': false, 'error': 'Server error: ${response.statusCode}: ${response.body}'};
     } catch (e) {
       return {'success': false, 'error': e.toString()};
     }
   }
-  
-  Future<Map<String, dynamic>> _put(String endpoint, Map<String, dynamic> data) async {
-    try {
-      final response = await _client.put(
-        Uri.parse('$baseUrl$endpoint'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(data),
-      ).timeout(const Duration(seconds: 10));
-      
-      if (response.statusCode == 200) {
-        return {'success': true, 'data': jsonDecode(response.body)};
-      } else {
-        return {'success': false, 'error': 'Server error: ${response.statusCode}'};
-      }
-    } catch (e) {
-      return {'success': false, 'error': e.toString()};
-    }
-  }
-  
-  Future<Map<String, dynamic>> _delete(String endpoint) async {
-    try {
-      final response = await _client.delete(
-        Uri.parse('$baseUrl$endpoint'),
-        headers: {'Content-Type': 'application/json'},
-      ).timeout(const Duration(seconds: 10));
-      
-      if (response.statusCode == 200) {
-        return {'success': true, 'data': jsonDecode(response.body)};
-      } else {
-        return {'success': false, 'error': 'Server error: ${response.statusCode}'};
-      }
-    } catch (e) {
-      return {'success': false, 'error': e.toString()};
-    }
-  }
-  
-  // ========== Health Check ==========
-  
+
   Future<bool> checkHealth() async {
-    try {
-      final result = await _get('/health');
-      return result['success'] == true;
-    } catch (e) {
-      return false;
-    }
+    final result = await _get('/health');
+    return result['success'] == true;
   }
-  
-  // ========== Inventory Items ==========
-  
-  Future<Map<String, dynamic>> getInventoryItems({String? since}) async {
-    String endpoint = '/inventory';
-    if (since != null) {
-      endpoint += '?since=$since';
-    }
-    return await _get(endpoint);
+
+  Future<Map<String, dynamic>> login({required String username, required String password}) async {
+    return _post('/auth/login', {'username': username, 'password': password});
   }
-  
-  Future<Map<String, dynamic>> createInventoryItem(Map<String, dynamic> item) async {
-    return await _post('/inventory', item);
+
+  Future<Map<String, dynamic>> registerDevice({
+    required String name,
+    required String deviceType,
+    String role = 'operator',
+  }) async {
+    return _post('/devices/register', {
+      'name': name,
+      'device_type': deviceType,
+      'role': role,
+    });
   }
-  
-  Future<Map<String, dynamic>> updateInventoryItem(String id, Map<String, dynamic> item) async {
-    return await _put('/inventory/$id', item);
+
+  Future<Map<String, dynamic>> syncPush({required List<Map<String, dynamic>> changes}) async {
+    return _post('/sync/push', {'changes': changes});
   }
-  
-  Future<Map<String, dynamic>> deleteInventoryItem(String id) async {
-    return await _delete('/inventory/$id');
+
+  Future<Map<String, dynamic>> syncPull({String? since, List<String>? tables}) async {
+    return _post('/sync/pull', {
+      if (since != null) 'since': since,
+      if (tables != null) 'tables': tables,
+    });
   }
-  
-  // ========== Warehouses ==========
-  
-  Future<Map<String, dynamic>> getWarehouses({String? since}) async {
-    String endpoint = '/warehouses';
-    if (since != null) {
-      endpoint += '?since=$since';
-    }
-    return await _get(endpoint);
-  }
-  
-  Future<Map<String, dynamic>> createWarehouse(Map<String, dynamic> warehouse) async {
-    return await _post('/warehouses', warehouse);
-  }
-  
-  Future<Map<String, dynamic>> updateWarehouse(String id, Map<String, dynamic> warehouse) async {
-    return await _put('/warehouses/$id', warehouse);
-  }
-  
-  Future<Map<String, dynamic>> deleteWarehouse(String id) async {
-    return await _delete('/warehouses/$id');
-  }
-  
-  // ========== Stock ==========
-  
-  Future<Map<String, dynamic>> getStock({String? since}) async {
-    String endpoint = '/stock';
-    if (since != null) {
-      endpoint += '?since=$since';
-    }
-    return await _get(endpoint);
-  }
-  
-  Future<Map<String, dynamic>> createStock(Map<String, dynamic> stock) async {
-    return await _post('/stock', stock);
-  }
-  
-  Future<Map<String, dynamic>> updateStock(String id, Map<String, dynamic> stock) async {
-    return await _put('/stock/$id', stock);
-  }
-  
-  // ========== Transactions ==========
-  
-  Future<Map<String, dynamic>> getTransactions({String? since}) async {
-    String endpoint = '/transactions';
-    if (since != null) {
-      endpoint += '?since=$since';
-    }
-    return await _get(endpoint);
-  }
-  
-  Future<Map<String, dynamic>> createTransaction(Map<String, dynamic> transaction) async {
-    return await _post('/transactions', transaction);
-  }
-  
-  // ========== Sync ==========
-  
+
+  // Legacy compatibility
   Future<Map<String, dynamic>> sync({
     required String? lastSync,
     required Map<String, dynamic> changes,
   }) async {
-    return await _post('/sync', {
-      'lastSync': lastSync,
-      'changes': changes,
+    final flat = <Map<String, dynamic>>[];
+    changes.forEach((table, rows) {
+      for (final row in rows as List) {
+        flat.add({
+          'client_id': row['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+          'table_name': table,
+          'record_id': row['id'],
+          'operation': 'upsert',
+          'payload': row,
+          'client_updated_at': DateTime.now().toIso8601String(),
+        });
+      }
     });
+    return syncPush(changes: flat);
   }
-  
-  void dispose() {
-    _client.close();
+
+  Future<Map<String, dynamic>> getInventoryItems() async {
+    return _pullTable('inventory_items');
   }
+
+  Future<Map<String, dynamic>> getWarehouses() async {
+    return _pullTable('warehouses');
+  }
+
+  Future<Map<String, dynamic>> getStock() async {
+    return _pullTable('stocks');
+  }
+
+  Future<Map<String, dynamic>> _pullTable(String table) async {
+    final result = await syncPull(tables: [table]);
+    if (result['success'] != true) return result;
+
+    final body = result['data'];
+    if (body is Map<String, dynamic>) {
+      final changes = body['changes'];
+      if (changes is Map<String, dynamic>) {
+        final rows = changes[table];
+        if (rows is List) {
+          return {'success': true, 'data': rows};
+        }
+      }
+    }
+    return {'success': true, 'data': <dynamic>[]};
+  }
+
+  void dispose() => _client.close();
 }

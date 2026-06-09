@@ -6,6 +6,22 @@ import '../models/inventory_item.dart';
 import '../models/settings.dart';
 
 class BarcodePrintService {
+  static const double _mmToPt = 2.834645669;
+
+  static bool isValidEanBarcode(String data) {
+    if (!RegExp(r'^\d+$').hasMatch(data)) return false;
+    if (data.length != 8 && data.length != 13) return false;
+
+    var sum = 0;
+    for (var i = data.length - 2; i >= 0; i--) {
+      final digit = int.parse(data[i]);
+      final positionFromRight = data.length - 2 - i;
+      sum += digit * (positionFromRight.isEven ? 3 : 1);
+    }
+    final check = (10 - (sum % 10)) % 10;
+    return check == int.parse(data[data.length - 1]);
+  }
+
   /// Generate and print barcode sticker for a product
   static Future<void> printBarcode({
     required InventoryItem item,
@@ -17,8 +33,8 @@ class BarcodePrintService {
     final pdf = pw.Document();
 
     // Convert mm to points (1mm = 2.834645669 points)
-    final width = stickerSize.widthMM * 2.834645669;
-    final height = stickerSize.heightMM * 2.834645669;
+    final width = stickerSize.widthMM * _mmToPt;
+    final height = stickerSize.heightMM * _mmToPt;
 
     // Add pages for each copy
     for (int i = 0; i < quantity; i++) {
@@ -55,8 +71,8 @@ class BarcodePrintService {
   }) async {
     final pdf = pw.Document();
 
-    final width = stickerSize.widthMM * 2.834645669;
-    final height = stickerSize.heightMM * 2.834645669;
+    final width = stickerSize.widthMM * _mmToPt;
+    final height = stickerSize.heightMM * _mmToPt;
 
     for (int i = 0; i < quantity; i++) {
       pdf.addPage(
@@ -158,16 +174,16 @@ class BarcodePrintService {
   }
 
   static pw.Barcode _selectBarcodeType(String data) {
-    // If data is numeric and suitable length, use EAN13 or Code128
     if (RegExp(r'^\d+$').hasMatch(data)) {
       if (data.length == 13 || data.length == 12) {
         return pw.Barcode.ean13();
-      } else if (data.length == 8 || data.length == 7) {
+      } else if (data.length == 8 && isValidEanBarcode(data)) {
+        return pw.Barcode.ean8();
+      } else if (data.length == 7) {
         return pw.Barcode.ean8();
       }
     }
-    
-    // Default to Code128 which handles alphanumeric
+
     return pw.Barcode.code128();
   }
 
@@ -221,5 +237,76 @@ class BarcodePrintService {
       case BarcodeStickerSize.extraLarge:
         return 55;
     }
+  }
+
+  /// Print a QR label with custom title/subtitle and payload.
+  static Future<void> printQrLabel({
+    required String title,
+    required String subtitle,
+    required String qrData,
+    required BarcodeStickerSize stickerSize,
+    int quantity = 1,
+  }) async {
+    final pdf = pw.Document();
+    final width = stickerSize.widthMM * _mmToPt;
+    final height = stickerSize.heightMM * _mmToPt;
+
+    for (int i = 0; i < quantity; i++) {
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat(width, height),
+          margin: const pw.EdgeInsets.all(8),
+          build: (_) {
+            return pw.Container(
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey300, width: 0.6),
+                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+              ),
+              padding: const pw.EdgeInsets.all(6),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                children: [
+                  pw.Text(
+                    title,
+                    textAlign: pw.TextAlign.center,
+                    style: pw.TextStyle(
+                      fontSize: _getNameFontSize(stickerSize),
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                    maxLines: 2,
+                  ),
+                  if (subtitle.isNotEmpty) ...[
+                    pw.SizedBox(height: 2),
+                    pw.Text(
+                      subtitle,
+                      textAlign: pw.TextAlign.center,
+                      style: pw.TextStyle(
+                        fontSize: _getSkuFontSize(stickerSize),
+                        color: PdfColors.grey700,
+                      ),
+                    ),
+                  ],
+                  pw.SizedBox(height: 6),
+                  pw.Expanded(
+                    child: pw.Center(
+                      child: pw.BarcodeWidget(
+                        data: qrData,
+                        barcode: pw.Barcode.qrCode(),
+                        drawText: false,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      );
+    }
+
+    await Printing.layoutPdf(
+      onLayout: (_) async => pdf.save(),
+      name: 'Warehouse_QR_Label.pdf',
+    );
   }
 }

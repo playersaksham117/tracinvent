@@ -2,14 +2,17 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart';
 import '../providers/settings_provider.dart';
 import '../providers/update_provider.dart';
+import '../providers/auth_provider.dart';
 import '../models/settings.dart';
-import '../services/database_service.dart';
+import '../services/unified_database_manager.dart';
+import '../services/github_update_service.dart';
 import '../widgets/database_cleanup_dialog.dart';
 import '../widgets/update_dialog.dart';
+import '../widgets/license_status_panel.dart';
+import '../widgets/pos_data_extraction_panel.dart';
 import 'user_management_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -30,6 +33,12 @@ class SettingsScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      _buildSecuritySection(context),
+                      const SizedBox(height: 24),
+                      const LicenseStatusPanel(),
+                      const SizedBox(height: 24),
+                      const PosDataExtractionPanel(),
+                      const SizedBox(height: 24),
                       _buildUserManagementSection(context),
                       const SizedBox(height: 24),
                       _buildGeneralSettings(context, settingsProvider),
@@ -113,10 +122,10 @@ class SettingsScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: const Column(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
               Icon(Icons.tune, color: Color(0xFF64748B), size: 20),
               SizedBox(width: 8),
@@ -130,8 +139,8 @@ class SettingsScreen extends StatelessWidget {
               ),
             ],
           ),
-          SizedBox(height: 20),
-          Text(
+          const SizedBox(height: 20),
+          const Text(
             'Application Name',
             style: TextStyle(
               fontSize: 13,
@@ -139,8 +148,8 @@ class SettingsScreen extends StatelessWidget {
               color: Color(0xFF64748B),
             ),
           ),
-          SizedBox(height: 8),
-          Text(
+          const SizedBox(height: 8),
+          const Text(
             'TracInvent',
             style: TextStyle(
               fontSize: 15,
@@ -148,8 +157,8 @@ class SettingsScreen extends StatelessWidget {
               color: Color(0xFF0F172A),
             ),
           ),
-          SizedBox(height: 16),
-          Text(
+          const SizedBox(height: 16),
+          const Text(
             'Version',
             style: TextStyle(
               fontSize: 13,
@@ -157,10 +166,10 @@ class SettingsScreen extends StatelessWidget {
               color: Color(0xFF64748B),
             ),
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           Text(
-            '1.0.0',
-            style: TextStyle(
+            GitHubUpdateService.versionString,
+            style: const TextStyle(
               fontSize: 15,
               color: Color(0xFF0F172A),
             ),
@@ -629,8 +638,7 @@ class SettingsScreen extends StatelessWidget {
       );
 
       // Get the database path
-      final directory = await getApplicationDocumentsDirectory();
-      final dbPath = join(directory.path, 'tracinvent.db');
+      final dbPath = await DatabaseManager.instance.getDatabasePath();
       final dbFile = File(dbPath);
 
       if (!await dbFile.exists()) {
@@ -743,17 +751,17 @@ class SettingsScreen extends StatelessWidget {
       }
 
       // Close current database
-      await DatabaseService.close();
+      await DatabaseManager.instance.close();
 
       // Get destination path
-      final directory = await getApplicationDocumentsDirectory();
-      final dbPath = join(directory.path, 'tracinvent.db');
+      final dbPath = await DatabaseManager.instance.getDatabasePath();
+      final dbDir = File(dbPath).parent.path;
 
       // Create backup of current database first
       final currentDb = File(dbPath);
       if (await currentDb.exists()) {
         final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first;
-        await currentDb.copy(join(directory.path, 'tracinvent_pre_import_$timestamp.db'));
+        await currentDb.copy(join(dbDir, 'tracinvent_pre_import_$timestamp.db'));
       }
 
       // Copy backup file to database location
@@ -962,8 +970,148 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildSecuritySection(BuildContext context) {
+    return Consumer<AuthProvider>(
+      builder: (context, auth, _) {
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.security, color: Color(0xFF64748B), size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'Account & Security',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Signed in as ${auth.currentUser?['name'] ?? 'User'} (${auth.currentUser?['email'] ?? ''})',
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () => _showSetPinDialog(context, auth),
+                    icon: const Icon(Icons.pin_outlined, size: 18),
+                    label: Text(auth.pinEnabled ? 'Change PIN' : 'Set 4-digit PIN'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      await auth.completeLogout();
+                    },
+                    icon: const Icon(Icons.logout, size: 18),
+                    label: const Text('Sign out completely'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showSetPinDialog(BuildContext context, AuthProvider auth) async {
+    final pinController = TextEditingController();
+    final confirmController = TextEditingController();
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Set 4-digit PIN'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: pinController,
+                keyboardType: TextInputType.number,
+                maxLength: 4,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'PIN',
+                  counterText: '',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: confirmController,
+                keyboardType: TextInputType.number,
+                maxLength: 4,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Confirm PIN',
+                  counterText: '',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (saved == true && context.mounted) {
+      if (pinController.text.length != 4 ||
+          pinController.text != confirmController.text) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('PIN must be 4 digits and both fields must match'),
+            backgroundColor: Color(0xFFEF4444),
+          ),
+        );
+        return;
+      }
+
+      final success = await auth.setPin(pinController.text);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(success ? 'PIN updated' : auth.errorMessage ?? 'Failed'),
+            backgroundColor: success ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+          ),
+        );
+      }
+    }
+
+    pinController.dispose();
+    confirmController.dispose();
+  }
+
   Widget _buildUserManagementSection(BuildContext context) {
-    return Container(
+    return Consumer<AuthProvider>(
+      builder: (context, auth, _) {
+        if (!auth.isAdmin) {
+          return const SizedBox.shrink();
+        }
+
+        return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1013,6 +1161,8 @@ class SettingsScreen extends StatelessWidget {
           ),
         ],
       ),
+        );
+      },
     );
   }
 

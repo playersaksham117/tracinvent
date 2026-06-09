@@ -6,6 +6,7 @@ import '../providers/stock_entry_provider.dart';
 import '../models/warehouse.dart';
 import '../models/location.dart';
 
+
 class WarehousesScreen extends StatefulWidget {
   const WarehousesScreen({super.key});
 
@@ -68,26 +69,20 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
                       color: isSelected ? Theme.of(context).colorScheme.primaryContainer : null,
                       child: ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: _getTypeColor(warehouse.type).withOpacity(0.2),
-                          child: Icon(
-                            _getTypeIcon(warehouse.type),
-                            color: _getTypeColor(warehouse.type),
+                          backgroundColor: Colors.blue.withValues(alpha: 0.2),
+                          child: const Icon(
+                            Icons.warehouse,
+                            color: Colors.blue,
                           ),
                         ),
                         title: Text(
                           warehouse.name,
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(_getTypeLabel(warehouse.type)),
-                            Text(
-                              warehouse.city ?? warehouse.address,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
+                        subtitle: Text(
+                          warehouse.city ?? warehouse.address,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         trailing: warehouse.isActive
                             ? const Icon(Icons.check_circle, color: Colors.green)
@@ -136,10 +131,10 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
             children: [
               CircleAvatar(
                 radius: 30,
-                backgroundColor: _getTypeColor(warehouse.type).withOpacity(0.2),
-                child: Icon(
-                  _getTypeIcon(warehouse.type),
-                  color: _getTypeColor(warehouse.type),
+                backgroundColor: Colors.blue.withValues(alpha: 0.2),
+                child: const Icon(
+                  Icons.warehouse,
+                  color: Colors.blue,
                   size: 32,
                 ),
               ),
@@ -153,7 +148,7 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
                       style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                     ),
                     Text(
-                      _getTypeLabel(warehouse.type),
+                      warehouse.code,
                       style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
                     ),
                   ],
@@ -163,6 +158,7 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
                 icon: const Icon(Icons.edit),
                 onPressed: () => _showEditWarehouseDialog(context, warehouse),
               ),
+
             ],
           ),
           const SizedBox(height: 24),
@@ -179,12 +175,16 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
                     _buildDetailRow(Icons.location_city, 'City', warehouse.city!),
                   if (warehouse.state != null)
                     _buildDetailRow(Icons.map, 'State', warehouse.state!),
-                  if (warehouse.pincode != null)
-                    _buildDetailRow(Icons.pin_drop, 'Pincode', warehouse.pincode!),
+                  if (warehouse.postalCode != null)
+                    _buildDetailRow(Icons.pin_drop, 'Postal Code', warehouse.postalCode!),
+                  if (warehouse.country != null)
+                    _buildDetailRow(Icons.public, 'Country', warehouse.country!),
                   if (warehouse.contactPerson != null)
                     _buildDetailRow(Icons.person, 'Contact', warehouse.contactPerson!),
                   if (warehouse.contactPhone != null)
                     _buildDetailRow(Icons.phone, 'Phone', warehouse.contactPhone!),
+                  if (warehouse.contactEmail != null)
+                    _buildDetailRow(Icons.email, 'Email', warehouse.contactEmail!),
                 ],
               ),
             ),
@@ -334,49 +334,16 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
     );
   }
 
-  IconData _getTypeIcon(String type) {
-    switch (type) {
-      case 'warehouse':
-        return Icons.warehouse;
-      case 'branch':
-        return Icons.store;
-      case 'godown':
-        return Icons.home_work;
-      case 'rack':
-        return Icons.storage;
-      case 'cell':
-        return Icons.grid_view;
-      default:
-        return Icons.location_on;
-    }
-  }
-
-  Color _getTypeColor(String type) {
-    switch (type) {
-      case 'warehouse':
-        return Colors.blue;
-      case 'branch':
-        return Colors.green;
-      case 'godown':
-        return Colors.orange;
-      default:
-        return Colors.purple;
-    }
-  }
-
-  String _getTypeLabel(String type) {
-    return type[0].toUpperCase() + type.substring(1);
-  }
-
   void _showAddWarehouseDialog(BuildContext context) {
     final nameController = TextEditingController();
     final addressController = TextEditingController();
     final cityController = TextEditingController();
     final stateController = TextEditingController();
-    final pincodeController = TextEditingController();
+    final postalCodeController = TextEditingController();
+    final countryController = TextEditingController();
     final contactPersonController = TextEditingController();
     final contactPhoneController = TextEditingController();
-    String selectedType = 'warehouse';
+    final contactEmailController = TextEditingController();
 
     showDialog(
       context: context,
@@ -394,20 +361,6 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
                     labelText: 'Name *',
                     border: OutlineInputBorder(),
                   ),
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  initialValue: selectedType,
-                  decoration: const InputDecoration(
-                    labelText: 'Type',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: 'warehouse', child: Text('Warehouse')),
-                    DropdownMenuItem(value: 'branch', child: Text('Branch')),
-                    DropdownMenuItem(value: 'godown', child: Text('Godown')),
-                  ],
-                  onChanged: (value) => selectedType = value!,
                 ),
                 const SizedBox(height: 16),
                 TextField(
@@ -443,12 +396,28 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                TextField(
-                  controller: pincodeController,
-                  decoration: const InputDecoration(
-                    labelText: 'Pincode',
-                    border: OutlineInputBorder(),
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: postalCodeController,
+                        decoration: const InputDecoration(
+                          labelText: 'Postal Code',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: TextField(
+                        controller: countryController,
+                        decoration: const InputDecoration(
+                          labelText: 'Country',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 16),
                 TextField(
@@ -463,6 +432,14 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
                   controller: contactPhoneController,
                   decoration: const InputDecoration(
                     labelText: 'Contact Phone',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: contactEmailController,
+                  decoration: const InputDecoration(
+                    labelText: 'Contact Email',
                     border: OutlineInputBorder(),
                   ),
                 ),
@@ -484,27 +461,46 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
                 return;
               }
 
-              final warehouse = Warehouse(
-                id: const Uuid().v4(),
-                name: nameController.text,
-                type: selectedType,
-                address: addressController.text,
-                city: cityController.text.isEmpty ? null : cityController.text,
-                state: stateController.text.isEmpty ? null : stateController.text,
-                pincode: pincodeController.text.isEmpty ? null : pincodeController.text,
-                contactPerson: contactPersonController.text.isEmpty ? null : contactPersonController.text,
-                contactPhone: contactPhoneController.text.isEmpty ? null : contactPhoneController.text,
-                createdAt: DateTime.now(),
-              );
-
-              await Provider.of<WarehouseProvider>(context, listen: false)
-                  .addWarehouse(warehouse);
-
-              if (context.mounted) {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Warehouse added successfully')),
+              try {
+                final warehouse = Warehouse(
+                  id: const Uuid().v4(),
+                  name: nameController.text,
+                  address: addressController.text,
+                  city: cityController.text.isEmpty ? null : cityController.text,
+                  state: stateController.text.isEmpty ? null : stateController.text,
+                  postalCode: postalCodeController.text.isEmpty ? null : postalCodeController.text,
+                  country: countryController.text.isEmpty ? null : countryController.text,
+                  contactPerson: contactPersonController.text.isEmpty ? null : contactPersonController.text,
+                  contactPhone: contactPhoneController.text.isEmpty ? null : contactPhoneController.text,
+                  contactEmail: contactEmailController.text.isEmpty ? null : contactEmailController.text,
+                  createdAt: DateTime.now(),
                 );
+
+                print('Adding warehouse: ${warehouse.toMap()}');
+
+                await Provider.of<WarehouseProvider>(context, listen: false)
+                    .addWarehouse(warehouse);
+
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Warehouse added successfully'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                print('Error adding warehouse: $e');
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error adding warehouse: $e'),
+                      backgroundColor: Colors.red,
+                      duration: const Duration(seconds: 5),
+                    ),
+                  );
+                }
               }
             },
             child: const Text('Add'),
@@ -519,10 +515,11 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
     final addressController = TextEditingController(text: warehouse.address);
     final cityController = TextEditingController(text: warehouse.city ?? '');
     final stateController = TextEditingController(text: warehouse.state ?? '');
-    final pincodeController = TextEditingController(text: warehouse.pincode ?? '');
+    final postalCodeController = TextEditingController(text: warehouse.postalCode ?? '');
+    final countryController = TextEditingController(text: warehouse.country ?? '');
     final contactPersonController = TextEditingController(text: warehouse.contactPerson ?? '');
     final contactPhoneController = TextEditingController(text: warehouse.contactPhone ?? '');
-    String selectedType = warehouse.type;
+    final contactEmailController = TextEditingController(text: warehouse.contactEmail ?? '');
     bool isActive = warehouse.isActive;
 
     showDialog(
@@ -549,21 +546,6 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
                       border: OutlineInputBorder(),
                       prefixIcon: Icon(Icons.warehouse),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    value: selectedType,
-                    decoration: const InputDecoration(
-                      labelText: 'Type',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.category),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'warehouse', child: Text('Warehouse')),
-                      DropdownMenuItem(value: 'branch', child: Text('Branch')),
-                      DropdownMenuItem(value: 'godown', child: Text('Godown')),
-                    ],
-                    onChanged: (value) => setState(() => selectedType = value!),
                   ),
                   const SizedBox(height: 16),
                   TextField(
@@ -602,13 +584,30 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  TextField(
-                    controller: pincodeController,
-                    decoration: const InputDecoration(
-                      labelText: 'Pincode',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.pin_drop),
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: postalCodeController,
+                          decoration: const InputDecoration(
+                            labelText: 'Postal Code',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.pin_drop),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: TextField(
+                          controller: countryController,
+                          decoration: const InputDecoration(
+                            labelText: 'Country',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.public),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 16),
                   TextField(
@@ -626,6 +625,15 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
                       labelText: 'Contact Phone',
                       border: OutlineInputBorder(),
                       prefixIcon: Icon(Icons.phone),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: contactEmailController,
+                    decoration: const InputDecoration(
+                      labelText: 'Contact Email',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.email),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -653,32 +661,50 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
                   return;
                 }
 
-                final updatedWarehouse = Warehouse(
-                  id: warehouse.id,
-                  name: nameController.text,
-                  type: selectedType,
-                  address: addressController.text,
-                  city: cityController.text.isEmpty ? null : cityController.text,
-                  state: stateController.text.isEmpty ? null : stateController.text,
-                  pincode: pincodeController.text.isEmpty ? null : pincodeController.text,
-                  contactPerson: contactPersonController.text.isEmpty ? null : contactPersonController.text,
-                  contactPhone: contactPhoneController.text.isEmpty ? null : contactPhoneController.text,
-                  isActive: isActive,
-                  createdAt: warehouse.createdAt,
-                );
-
-                await Provider.of<WarehouseProvider>(context, listen: false)
-                    .updateWarehouse(updatedWarehouse);
-
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Warehouse "${nameController.text}" updated'),
-                      backgroundColor: Colors.green,
-                    ),
+                try {
+                  final updatedWarehouse = Warehouse(
+                    id: warehouse.id,
+                    code: warehouse.code,
+                    name: nameController.text,
+                    address: addressController.text,
+                    city: cityController.text.isEmpty ? null : cityController.text,
+                    state: stateController.text.isEmpty ? null : stateController.text,
+                    postalCode: postalCodeController.text.isEmpty ? null : postalCodeController.text,
+                    country: countryController.text.isEmpty ? null : countryController.text,
+                    contactPerson: contactPersonController.text.isEmpty ? null : contactPersonController.text,
+                    contactPhone: contactPhoneController.text.isEmpty ? null : contactPhoneController.text,
+                    contactEmail: contactEmailController.text.isEmpty ? null : contactEmailController.text,
+                    isActive: isActive,
+                    createdAt: warehouse.createdAt,
+                    updatedAt: DateTime.now(),
                   );
-                  this.setState(() => _selectedWarehouse = updatedWarehouse);
+
+                  print('Updating warehouse: ${updatedWarehouse.toMap()}');
+
+                  await Provider.of<WarehouseProvider>(context, listen: false)
+                      .updateWarehouse(updatedWarehouse);
+
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Warehouse "${nameController.text}" updated'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                    this.setState(() => _selectedWarehouse = updatedWarehouse);
+                  }
+                } catch (e) {
+                  print('Error updating warehouse: $e');
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error updating warehouse: $e'),
+                        backgroundColor: Colors.red,
+                        duration: const Duration(seconds: 5),
+                      ),
+                    );
+                  }
                 }
               },
               icon: const Icon(Icons.save),
@@ -941,4 +967,5 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
       ),
     );
   }
+
 }

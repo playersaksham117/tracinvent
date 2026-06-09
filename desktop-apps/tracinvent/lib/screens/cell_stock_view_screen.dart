@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/warehouse_provider.dart';
 import '../providers/stock_entry_provider.dart';
-import '../services/database_service.dart';
+import '../services/unified_database_manager.dart';
 import '../models/location.dart';
 
 /// Screen showing detailed view of products in each cell
@@ -63,7 +63,7 @@ class _CellStockViewScreenState extends State<CellStockViewScreen> with SingleTi
   Future<void> _loadZones() async {
     if (_selectedWarehouseId == null) return;
     
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     final zoneMaps = await db.query(
       'zones',
       where: 'warehouseId = ?',
@@ -80,7 +80,7 @@ class _CellStockViewScreenState extends State<CellStockViewScreen> with SingleTi
   Future<void> _loadCells() async {
     if (_selectedWarehouseId == null) return;
     
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     List<Map<String, dynamic>> cellMaps;
     
     if (_selectedZoneId != null) {
@@ -114,7 +114,7 @@ class _CellStockViewScreenState extends State<CellStockViewScreen> with SingleTi
   Future<void> _loadCellDetails() async {
     if (_selectedCell == null) return;
     
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     
     // Load products in this cell
     final products = await db.rawQuery('''
@@ -268,7 +268,7 @@ class _CellStockViewScreenState extends State<CellStockViewScreen> with SingleTi
             Padding(
               padding: const EdgeInsets.all(16),
               child: DropdownButtonFormField<String>(
-                value: _selectedWarehouseId,
+                initialValue: _selectedWarehouseId,
                 decoration: InputDecoration(
                   labelText: 'Warehouse',
                   prefixIcon: const Icon(Icons.warehouse, size: 20),
@@ -300,7 +300,7 @@ class _CellStockViewScreenState extends State<CellStockViewScreen> with SingleTi
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: DropdownButtonFormField<String?>(
-                value: _selectedZoneId,
+                initialValue: _selectedZoneId,
                 decoration: InputDecoration(
                   labelText: 'Zone (Optional)',
                   prefixIcon: const Icon(Icons.dashboard_outlined, size: 20),
@@ -351,7 +351,7 @@ class _CellStockViewScreenState extends State<CellStockViewScreen> with SingleTi
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF3B82F6).withOpacity(0.1),
+                      color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
@@ -424,10 +424,10 @@ class _CellStockViewScreenState extends State<CellStockViewScreen> with SingleTi
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: isSelected ? const Color(0xFF2563EB).withOpacity(0.1) : Colors.transparent,
+              color: isSelected ? const Color(0xFF2563EB).withValues(alpha: 0.1) : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: isSelected ? const Color(0xFF2563EB).withOpacity(0.3) : Colors.grey.shade200,
+                color: isSelected ? const Color(0xFF2563EB).withValues(alpha: 0.3) : Colors.grey.shade200,
               ),
             ),
             child: Row(
@@ -437,7 +437,7 @@ class _CellStockViewScreenState extends State<CellStockViewScreen> with SingleTi
                   height: 40,
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? const Color(0xFF2563EB).withOpacity(0.2)
+                        ? const Color(0xFF2563EB).withValues(alpha: 0.2)
                         : Colors.grey.shade100,
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -742,7 +742,7 @@ class _CellStockViewScreenState extends State<CellStockViewScreen> with SingleTi
                 width: 60,
                 height: 60,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2563EB).withOpacity(0.1),
+                  color: const Color(0xFF2563EB).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Center(
@@ -827,7 +827,7 @@ class _CellStockViewScreenState extends State<CellStockViewScreen> with SingleTi
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -925,7 +925,7 @@ class _CellStockViewScreenState extends State<CellStockViewScreen> with SingleTi
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: const Color(0xFF3B82F6).withOpacity(0.1),
+              color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(
@@ -1001,8 +1001,8 @@ class _CellStockViewScreenState extends State<CellStockViewScreen> with SingleTi
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: isExpired
-                          ? Colors.red.withOpacity(0.1)
-                          : (isExpiringSoon ? Colors.orange.withOpacity(0.1) : Colors.green.withOpacity(0.1)),
+                          ? Colors.red.withValues(alpha: 0.1)
+                          : (isExpiringSoon ? Colors.orange.withValues(alpha: 0.1) : Colors.green.withValues(alpha: 0.1)),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Row(
@@ -1152,7 +1152,7 @@ class _CellStockViewScreenState extends State<CellStockViewScreen> with SingleTi
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF2563EB).withOpacity(0.1),
+                      color: const Color(0xFF2563EB).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -1231,7 +1231,7 @@ class _CellStockViewScreenState extends State<CellStockViewScreen> with SingleTi
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, color: color, size: 20),
@@ -1246,7 +1246,7 @@ class _CellStockViewScreenState extends State<CellStockViewScreen> with SingleTi
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: color.withOpacity(0.1),
+                        color: color.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
@@ -1414,7 +1414,7 @@ class _CellStockViewScreenState extends State<CellStockViewScreen> with SingleTi
                 return;
               }
 
-              final db = await DatabaseService.database;
+              final db = await DatabaseManager.instance.database;
               await db.insert('cells', {
                 'id': 'cell_${DateTime.now().millisecondsSinceEpoch}',
                 'warehouseId': _selectedWarehouseId,

@@ -18,7 +18,7 @@ class AddStockScreen extends StatefulWidget {
 
 class _AddStockScreenState extends State<AddStockScreen> {
   final _formKey = GlobalKey<FormState>();
-  
+
   // Controllers
   final _quantityController = TextEditingController();
   final _batchNumberController = TextEditingController();
@@ -27,19 +27,19 @@ class _AddStockScreenState extends State<AddStockScreen> {
   final _barcodeController = TextEditingController();
   final _unitPriceController = TextEditingController();
   final _itemSearchController = TextEditingController();
-  
+
   // Selected values
   Warehouse? _selectedWarehouse;
   Zone? _selectedZone;
   Cell? _selectedCell;
   InventoryItem? _selectedItem;
   DateTime? _expiryDate;
-  
+
   // Lists for dropdowns
   List<Zone> _zones = [];
   List<Cell> _cells = [];
   List<InventoryItem> _filteredItems = [];
-  
+
   // UI state
   bool _isCreatingZone = false;
   bool _isCreatingCell = false;
@@ -56,9 +56,11 @@ class _AddStockScreenState extends State<AddStockScreen> {
   }
 
   Future<void> _loadInitialData() async {
-    final inventoryProvider = Provider.of<InventoryProvider>(context, listen: false);
-    final warehouseProvider = Provider.of<WarehouseProvider>(context, listen: false);
-    
+    final inventoryProvider =
+        Provider.of<InventoryProvider>(context, listen: false);
+    final warehouseProvider =
+        Provider.of<WarehouseProvider>(context, listen: false);
+
     await Future.wait([
       inventoryProvider.loadInventoryItems(),
       warehouseProvider.loadWarehouses(),
@@ -87,15 +89,19 @@ class _AddStockScreenState extends State<AddStockScreen> {
       });
       return;
     }
-    
-    final inventoryProvider = Provider.of<InventoryProvider>(context, listen: false);
+
+    final inventoryProvider =
+        Provider.of<InventoryProvider>(context, listen: false);
     final lowerQuery = query.toLowerCase();
     setState(() {
-      _filteredItems = inventoryProvider.items.where((item) {
-        return item.name.toLowerCase().startsWith(lowerQuery) ||
-               item.sku.toLowerCase().startsWith(lowerQuery) ||
-               (item.barcode?.toLowerCase().startsWith(lowerQuery) ?? false);
-      }).take(10).toList();
+      _filteredItems = inventoryProvider.items
+          .where((item) {
+            return item.name.toLowerCase().startsWith(lowerQuery) ||
+                item.sku.toLowerCase().startsWith(lowerQuery) ||
+                (item.barcode?.toLowerCase().startsWith(lowerQuery) ?? false);
+          })
+          .take(10)
+          .toList();
       _showItemSuggestions = _filteredItems.isNotEmpty;
     });
   }
@@ -135,7 +141,7 @@ class _AddStockScreenState extends State<AddStockScreen> {
       _selectedCell = null;
       _cells = [];
     });
-    
+
     if (zone != null) {
       final provider = Provider.of<StockEntryProvider>(context, listen: false);
       final cells = await provider.loadCellsForZone(zone.id);
@@ -178,7 +184,7 @@ class _AddStockScreenState extends State<AddStockScreen> {
         warehouseId: _selectedWarehouse!.id,
         name: _cellNameController.text.trim(),
       );
-      
+
       final zones = await provider.loadZones(_selectedWarehouse!.id);
       setState(() {
         _zones = zones;
@@ -187,7 +193,7 @@ class _AddStockScreenState extends State<AddStockScreen> {
         _cellNameController.clear();
         _cells = [];
       });
-      
+
       _showSuccess('Zone created successfully');
     } catch (e) {
       _showError(e.toString());
@@ -197,7 +203,8 @@ class _AddStockScreenState extends State<AddStockScreen> {
   }
 
   Future<void> _createCell() async {
-    if (_cellNameController.text.trim().isEmpty || _cellCodeController.text.trim().isEmpty) {
+    if (_cellNameController.text.trim().isEmpty ||
+        _cellCodeController.text.trim().isEmpty) {
       _showError('Please enter both cell name and code');
       return;
     }
@@ -211,7 +218,7 @@ class _AddStockScreenState extends State<AddStockScreen> {
         name: _cellNameController.text.trim(),
         code: _cellCodeController.text.trim().toUpperCase(),
       );
-      
+
       final cells = await provider.loadCellsForZone(_selectedZone!.id);
       setState(() {
         _cells = cells;
@@ -220,7 +227,7 @@ class _AddStockScreenState extends State<AddStockScreen> {
         _cellNameController.clear();
         _cellCodeController.clear();
       });
-      
+
       _onCellChanged(cell);
       _showSuccess('Cell created successfully');
     } catch (e) {
@@ -274,19 +281,19 @@ class _AddStockScreenState extends State<AddStockScreen> {
         cellId: _selectedCell!.id,
         quantity: quantity,
         unitPrice: unitPrice,
-        batchNumber: _batchNumberController.text.trim().isEmpty 
-            ? null 
+        batchNumber: _batchNumberController.text.trim().isEmpty
+            ? null
             : _batchNumberController.text.trim(),
         expiryDate: _expiryDate,
       );
 
       _showSuccess('Stock added successfully at $_locationCode');
       _resetForm();
-      
+
       // Reload inventory to update stock levels
-      final inventoryProvider = Provider.of<InventoryProvider>(context, listen: false);
+      final inventoryProvider =
+          Provider.of<InventoryProvider>(context, listen: false);
       await inventoryProvider.loadInventoryItems();
-      
     } catch (e) {
       _showError(e.toString());
     } finally {
@@ -506,7 +513,7 @@ class _AddStockScreenState extends State<AddStockScreen> {
                   items: provider.warehouses.map((warehouse) {
                     return DropdownMenuItem(
                       value: warehouse,
-                      child: Text('${warehouse.name} (${warehouse.type})'),
+                      child: Text('${warehouse.name} (${warehouse.code})'),
                     );
                   }).toList(),
                   onChanged: _isLoading ? null : _onWarehouseChanged,
@@ -549,23 +556,22 @@ class _AddStockScreenState extends State<AddStockScreen> {
             const SizedBox(height: 4),
             Text(
               'Locations created here will be available for all warehouse operations',
-              style: TextStyle(color: Colors.blue.shade700, fontSize: 12, fontStyle: FontStyle.italic),
+              style: TextStyle(
+                  color: Colors.blue.shade700,
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic),
             ),
             const SizedBox(height: 16),
-            
+
             // Zone selection
             if (_selectedWarehouse != null) ...[
-              _isCreatingZone
-                ? _buildCreateZoneForm()
-                : _buildZoneDropdown(),
+              _isCreatingZone ? _buildCreateZoneForm() : _buildZoneDropdown(),
               const SizedBox(height: 16),
             ],
-            
+
             // Cell selection (only if zone is selected)
             if (_selectedZone != null) ...[
-              _isCreatingCell
-                ? _buildCreateCellForm()
-                : _buildCellDropdown(),
+              _isCreatingCell ? _buildCreateCellForm() : _buildCellDropdown(),
             ],
           ],
         ),
@@ -578,7 +584,7 @@ class _AddStockScreenState extends State<AddStockScreen> {
       children: [
         Expanded(
           child: DropdownButtonFormField<Zone>(
-            value: _selectedZone,
+            initialValue: _selectedZone,
             decoration: const InputDecoration(
               labelText: 'Zone *',
               border: OutlineInputBorder(),
@@ -652,7 +658,7 @@ class _AddStockScreenState extends State<AddStockScreen> {
       children: [
         Expanded(
           child: DropdownButtonFormField<Cell>(
-            value: _selectedCell,
+            initialValue: _selectedCell,
             decoration: const InputDecoration(
               labelText: 'Cell *',
               border: OutlineInputBorder(),
@@ -737,7 +743,7 @@ class _AddStockScreenState extends State<AddStockScreen> {
     return Consumer2<InventoryProvider, SettingsProvider>(
       builder: (context, inventoryProvider, settingsProvider, child) {
         final currencySymbol = settingsProvider.currency.symbol;
-        
+
         return Card(
           child: Padding(
             padding: const EdgeInsets.all(16.0),
@@ -758,11 +764,14 @@ class _AddStockScreenState extends State<AddStockScreen> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Dynamic Item Search
                 const Text(
                   'Search Item *',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey),
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey),
                 ),
                 const SizedBox(height: 8),
                 TextField(
@@ -788,7 +797,7 @@ class _AddStockScreenState extends State<AddStockScreen> {
                   ),
                   onChanged: _filterItems,
                 ),
-                
+
                 // Item suggestions dropdown
                 if (_showItemSuggestions)
                   Container(
@@ -800,7 +809,7 @@ class _AddStockScreenState extends State<AddStockScreen> {
                       border: Border.all(color: Colors.grey.shade300),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
+                          color: Colors.black.withValues(alpha: 0.1),
                           blurRadius: 8,
                           offset: const Offset(0, 4),
                         ),
@@ -811,19 +820,36 @@ class _AddStockScreenState extends State<AddStockScreen> {
                       itemCount: _filteredItems.length,
                       itemBuilder: (context, index) {
                         final item = _filteredItems[index];
-                        final totalStock = inventoryProvider.getTotalStock(item.id);
+                        final totalStock =
+                            inventoryProvider.getTotalStock(item.id);
                         return ListTile(
                           leading: CircleAvatar(
                             backgroundColor: Colors.purple.shade50,
-                            child: Icon(Icons.inventory_2, color: Colors.purple.shade700, size: 20),
+                            child: Icon(Icons.inventory_2,
+                                color: Colors.purple.shade700, size: 20),
                           ),
                           title: Text(
                             item.name,
                             style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
-                          subtitle: Text(
-                            'SKU: ${item.sku} | Stock: ${totalStock.toStringAsFixed(0)} ${item.unit}',
-                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'SKU: ${item.sku} | Stock: ${totalStock.toStringAsFixed(0)} ${item.unit}',
+                                style: TextStyle(
+                                    fontSize: 12, color: Colors.grey.shade600),
+                              ),
+                              if (item.brand != null &&
+                                      item.brand!.isNotEmpty ||
+                                  item.hsn != null && item.hsn!.isNotEmpty)
+                                Text(
+                                  '${item.brand != null && item.brand!.isNotEmpty ? 'Brand: ${item.brand}' : ''}${item.brand != null && item.brand!.isNotEmpty && item.hsn != null && item.hsn!.isNotEmpty ? ' | ' : ''}${item.hsn != null && item.hsn!.isNotEmpty ? 'HSN: ${item.hsn}' : ''}',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey.shade500),
+                                ),
+                            ],
                           ),
                           trailing: Text(
                             '$currencySymbol${item.costPrice.toStringAsFixed(2)}',
@@ -838,7 +864,7 @@ class _AddStockScreenState extends State<AddStockScreen> {
                     ),
                   ),
                 const SizedBox(height: 16),
-                
+
                 // Selected item display
                 if (_selectedItem != null) ...[
                   Container(
@@ -863,9 +889,46 @@ class _AddStockScreenState extends State<AddStockScreen> {
                                   color: Colors.green.shade800,
                                 ),
                               ),
-                              Text(
-                                'SKU: ${_selectedItem!.sku} | Category: ${_selectedItem!.category} | Unit: ${_selectedItem!.unit}',
-                                style: TextStyle(fontSize: 12, color: Colors.green.shade700),
+                              const SizedBox(height: 4),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 4,
+                                children: [
+                                  Text(
+                                    'SKU: ${_selectedItem!.sku}',
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.green.shade700),
+                                  ),
+                                  Text(
+                                    '| Category: ${_selectedItem!.category}',
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.green.shade700),
+                                  ),
+                                  Text(
+                                    '| Unit: ${_selectedItem!.unit}',
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.green.shade700),
+                                  ),
+                                  if (_selectedItem!.brand != null &&
+                                      _selectedItem!.brand!.isNotEmpty)
+                                    Text(
+                                      '| Brand: ${_selectedItem!.brand}',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.green.shade700),
+                                    ),
+                                  if (_selectedItem!.hsn != null &&
+                                      _selectedItem!.hsn!.isNotEmpty)
+                                    Text(
+                                      '| HSN: ${_selectedItem!.hsn}',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.green.shade700),
+                                    ),
+                                ],
                               ),
                             ],
                           ),
@@ -874,7 +937,7 @@ class _AddStockScreenState extends State<AddStockScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Unit Price Input
                   TextField(
                     controller: _unitPriceController,
@@ -890,7 +953,8 @@ class _AddStockScreenState extends State<AddStockScreen> {
                   // Barcode Scanner Input (alternative)
                   const Text(
                     'OR Scan Barcode',
-                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey),
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold, color: Colors.grey),
                   ),
                   const SizedBox(height: 8),
                   TextField(
@@ -907,7 +971,8 @@ class _AddStockScreenState extends State<AddStockScreen> {
                         },
                       ),
                     ),
-                    onSubmitted: (value) => _searchItemByBarcode(value, inventoryProvider),
+                    onSubmitted: (value) =>
+                        _searchItemByBarcode(value, inventoryProvider),
                     onChanged: (value) {
                       if (value.length >= 3) {
                         _searchItemByBarcode(value, inventoryProvider);
@@ -922,17 +987,17 @@ class _AddStockScreenState extends State<AddStockScreen> {
       },
     );
   }
-  
+
   void _searchItemByBarcode(String barcode, InventoryProvider provider) {
     if (barcode.isEmpty) return;
-    
+
     // Search by barcode or SKU
     final item = provider.items.where((item) {
       final barcodeMatch = item.barcode?.toLowerCase() == barcode.toLowerCase();
       final skuMatch = item.sku.toLowerCase() == barcode.toLowerCase();
       return barcodeMatch || skuMatch;
     }).firstOrNull;
-    
+
     if (item != null) {
       _selectItem(item);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -982,7 +1047,8 @@ class _AddStockScreenState extends State<AddStockScreen> {
                 prefixIcon: const Icon(Icons.production_quantity_limits),
                 suffixText: _selectedItem?.unit ?? '',
               ),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
               ],
@@ -1013,7 +1079,8 @@ class _AddStockScreenState extends State<AddStockScreen> {
               onTap: () async {
                 final date = await showDatePicker(
                   context: context,
-                  initialDate: _expiryDate ?? DateTime.now().add(const Duration(days: 365)),
+                  initialDate: _expiryDate ??
+                      DateTime.now().add(const Duration(days: 365)),
                   firstDate: DateTime.now(),
                   lastDate: DateTime.now().add(const Duration(days: 3650)),
                 );

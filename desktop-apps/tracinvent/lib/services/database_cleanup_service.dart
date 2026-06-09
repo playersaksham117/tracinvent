@@ -1,7 +1,5 @@
 import 'dart:io';
-import 'package:path/path.dart';
-import 'package:path_provider/path_provider.dart';
-import '../services/database_service.dart';
+import 'unified_database_manager.dart';
 
 /// Database maintenance and cleanup utility
 class DatabaseCleanupService {
@@ -9,12 +7,11 @@ class DatabaseCleanupService {
   static Future<void> cleanDatabase() async {
     try {
       // Close any existing database connection
-      final db = await DatabaseService.database;
+      final db = await DatabaseManager.instance.database;
       await db.close();
 
       // Get database path
-      final directory = await getApplicationDocumentsDirectory();
-      final dbPath = join(directory.path, 'tracinvent.db');
+      final dbPath = await DatabaseManager.instance.getDatabasePath();
 
       // Delete the database file
       final file = File(dbPath);
@@ -24,7 +21,7 @@ class DatabaseCleanupService {
       }
 
       // Reinitialize database (will create fresh tables)
-      await DatabaseService.database;
+      await DatabaseManager.instance.database;
       print('Database reinitialized successfully');
     } catch (e) {
       print('Error cleaning database: $e');
@@ -41,7 +38,7 @@ class DatabaseCleanupService {
     bool clearMovements = false,
   }) async {
     try {
-      final db = await DatabaseService.database;
+      final db = await DatabaseManager.instance.database;
 
       if (clearMovements) {
         try {
@@ -135,7 +132,7 @@ class DatabaseCleanupService {
   /// Vacuum database to reclaim space and optimize
   static Future<void> optimizeDatabase() async {
     try {
-      final db = await DatabaseService.database;
+      final db = await DatabaseManager.instance.database;
       await db.execute('VACUUM');
       await db.execute('ANALYZE');
       print('Database optimized');
@@ -148,8 +145,7 @@ class DatabaseCleanupService {
   /// Get database file size
   static Future<int> getDatabaseSize() async {
     try {
-      final directory = await getApplicationDocumentsDirectory();
-      final dbPath = join(directory.path, 'tracinvent.db');
+      final dbPath = await DatabaseManager.instance.getDatabasePath();
       final file = File(dbPath);
       
       if (await file.exists()) {

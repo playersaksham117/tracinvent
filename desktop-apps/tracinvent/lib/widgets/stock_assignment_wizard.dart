@@ -115,7 +115,7 @@ class _StockAssignmentWizardState extends State<StockAssignmentWizard> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: const Color(0xFF10B981).withOpacity(0.1),
+              color: const Color(0xFF10B981).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(Icons.add_location, color: Color(0xFF10B981), size: 24),
@@ -274,7 +274,7 @@ class _StockAssignmentWizardState extends State<StockAssignmentWizard> {
         leading: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: const Color(0xFF3B82F6).withOpacity(0.1),
+            color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: const Icon(Icons.warehouse, color: Color(0xFF3B82F6)),
@@ -377,7 +377,7 @@ class _StockAssignmentWizardState extends State<StockAssignmentWizard> {
         leading: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: const Color(0xFF8B5CF6).withOpacity(0.1),
+            color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: const Icon(Icons.inventory_2, color: Color(0xFF8B5CF6)),
@@ -433,12 +433,12 @@ class _StockAssignmentWizardState extends State<StockAssignmentWizard> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            const Color(0xFF10B981).withOpacity(0.1),
-            const Color(0xFF10B981).withOpacity(0.05),
+            const Color(0xFF10B981).withValues(alpha: 0.1),
+            const Color(0xFF10B981).withValues(alpha: 0.05),
           ],
         ),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
+        border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -712,7 +712,7 @@ class _StockAssignmentWizardState extends State<StockAssignmentWizard> {
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF10B981).withOpacity(0.1),
+                    color: const Color(0xFF10B981).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(icon, color: const Color(0xFF10B981)),

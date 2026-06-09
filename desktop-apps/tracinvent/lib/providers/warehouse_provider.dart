@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../models/warehouse.dart';
-import '../services/database_service.dart';
+import '../services/unified_database_manager.dart';
 
 class WarehouseProvider with ChangeNotifier {
   List<Warehouse> _warehouses = [];
@@ -13,37 +13,57 @@ class WarehouseProvider with ChangeNotifier {
     _warehouses.where((w) => w.isActive).toList();
 
   Future<void> loadWarehouses() async {
-    final db = await DatabaseService.database;
-    final List<Map<String, dynamic>> maps = await db.query('warehouses');
-    _warehouses = maps.map((map) => Warehouse.fromMap(map)).toList();
-    notifyListeners();
+    try {
+      final db = await DatabaseManager.instance.database;
+      final List<Map<String, dynamic>> maps = await db.query('warehouses');
+      _warehouses = maps.map((map) => Warehouse.fromMap(map)).toList();
+      notifyListeners();
+      debugPrint('Loaded ${_warehouses.length} warehouses');
+    } catch (e) {
+      debugPrint('Error loading warehouses: $e');
+      rethrow;
+    }
   }
 
   Future<void> addWarehouse(Warehouse warehouse) async {
-    final db = await DatabaseService.database;
-    await db.insert('warehouses', warehouse.toMap());
-    await loadWarehouses();
+    try {
+      debugPrint('Adding warehouse: ${warehouse.toMap()}');
+      final db = await DatabaseManager.instance.database;
+      await db.insert('warehouses', warehouse.toMap());
+      debugPrint('Warehouse inserted successfully');
+      await loadWarehouses();
+    } catch (e) {
+      debugPrint('Error adding warehouse: $e');
+      rethrow;
+    }
   }
 
   Future<void> updateWarehouse(Warehouse warehouse) async {
-    final db = await DatabaseService.database;
-    await db.update(
-      'warehouses',
-      warehouse.toMap(),
-      where: 'id = ?',
-      whereArgs: [warehouse.id],
-    );
-    await loadWarehouses();
+    try {
+      debugPrint('Updating warehouse: ${warehouse.toMap()}');
+      final db = await DatabaseManager.instance.database;
+      final result = await db.update(
+        'warehouses',
+        warehouse.toMap(),
+        where: 'id = ?',
+        whereArgs: [warehouse.id],
+      );
+      debugPrint('Warehouse update result: $result rows affected');
+      await loadWarehouses();
+    } catch (e) {
+      debugPrint('Error updating warehouse: $e');
+      rethrow;
+    }
   }
 
   Future<void> deleteWarehouse(String id) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     await db.delete('warehouses', where: 'id = ?', whereArgs: [id]);
     await loadWarehouses();
   }
 
   Future<void> loadStorageLocations(String warehouseId) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     final List<Map<String, dynamic>> maps = await db.query(
       'cells',
       where: 'warehouseId = ?',
@@ -60,16 +80,31 @@ class WarehouseProvider with ChangeNotifier {
   }
 
   Future<void> addStorageLocation(StorageLocation location) async {
-    final db = await DatabaseService.database;
-    await db.insert('storage_locations', location.toMap());
+    final db = await DatabaseManager.instance.database;
+    final now = DateTime.now().toIso8601String();
+    await db.insert('cells', {
+      'id': location.id,
+      'warehouseId': location.warehouseId,
+      'name': location.code,
+      'code': location.code,
+      'description': location.description,
+      'isActive': 1,
+      'createdAt': now,
+      'updatedAt': now,
+    });
     await loadStorageLocations(location.warehouseId);
   }
 
   Future<void> updateStorageLocation(StorageLocation location) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     await db.update(
-      'storage_locations',
-      location.toMap(),
+      'cells',
+      {
+        'name': location.code,
+        'code': location.code,
+        'description': location.description,
+        'updatedAt': DateTime.now().toIso8601String(),
+      },
       where: 'id = ?',
       whereArgs: [location.id],
     );
@@ -77,8 +112,8 @@ class WarehouseProvider with ChangeNotifier {
   }
 
   Future<void> deleteStorageLocation(String id, String warehouseId) async {
-    final db = await DatabaseService.database;
-    await db.delete('storage_locations', where: 'id = ?', whereArgs: [id]);
+    final db = await DatabaseManager.instance.database;
+    await db.delete('cells', where: 'id = ?', whereArgs: [id]);
     await loadStorageLocations(warehouseId);
   }
 }

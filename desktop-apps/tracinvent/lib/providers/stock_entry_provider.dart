@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/location.dart';
 import '../models/stock.dart';
-import '../services/database_service.dart';
+import '../services/unified_database_manager.dart';
 import 'package:uuid/uuid.dart';
 
 class StockEntryProvider with ChangeNotifier {
@@ -53,7 +53,7 @@ class StockEntryProvider with ChangeNotifier {
     String? shelfId,
     String? binId,
   }) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     
     String? warehouseName;
     String? cellName;
@@ -107,7 +107,7 @@ class StockEntryProvider with ChangeNotifier {
   // ==================== ZONE OPERATIONS ====================
 
   Future<List<Zone>> loadZones(String warehouseId) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     final maps = await db.query(
       'zones',
       where: 'warehouseId = ?',
@@ -126,7 +126,7 @@ class StockEntryProvider with ChangeNotifier {
     required String name,
     String? description,
   }) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     
     // Check for duplicate zone name in warehouse
     final existing = await db.query(
@@ -158,7 +158,7 @@ class StockEntryProvider with ChangeNotifier {
     required String name,
     String? description,
   }) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     
     await db.update(
       'zones',
@@ -174,7 +174,7 @@ class StockEntryProvider with ChangeNotifier {
   }
 
   Future<void> deleteZone(String zoneId) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     
     // Delete all cells in this zone first
     await db.delete('cells', where: 'zoneId = ?', whereArgs: [zoneId]);
@@ -191,7 +191,7 @@ class StockEntryProvider with ChangeNotifier {
   // ==================== RACK OPERATIONS ====================
 
   Future<List<Rack>> loadRacks(String zoneId) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     final maps = await db.query(
       'racks',
       where: 'zoneId = ?',
@@ -210,7 +210,7 @@ class StockEntryProvider with ChangeNotifier {
     required String name,
     String? description,
   }) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     
     // Check for duplicate rack name in zone
     final existing = await db.query(
@@ -244,7 +244,7 @@ class StockEntryProvider with ChangeNotifier {
   // ==================== SHELF OPERATIONS ====================
 
   Future<List<Shelf>> loadShelves(String rackId) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     final maps = await db.query(
       'shelves',
       where: 'rackId = ?',
@@ -263,7 +263,7 @@ class StockEntryProvider with ChangeNotifier {
     required String name,
     String? description,
   }) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     
     // Check for duplicate shelf name in rack
     final existing = await db.query(
@@ -297,7 +297,7 @@ class StockEntryProvider with ChangeNotifier {
   // ==================== BIN OPERATIONS ====================
 
   Future<List<Bin>> loadBins(String shelfId) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     final maps = await db.query(
       'bins',
       where: 'shelfId = ?',
@@ -317,7 +317,7 @@ class StockEntryProvider with ChangeNotifier {
     String? description,
     double? maxCapacity,
   }) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     
     // Check for duplicate bin name in shelf
     final existing = await db.query(
@@ -352,7 +352,7 @@ class StockEntryProvider with ChangeNotifier {
   // ==================== CELL OPERATIONS (SIMPLIFIED LOCATION) ====================
 
   Future<List<Cell>> loadCells(String warehouseId) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     final maps = await db.query(
       'cells',
       where: 'warehouseId = ? AND isActive = ?',
@@ -368,7 +368,7 @@ class StockEntryProvider with ChangeNotifier {
 
   // Load cells for a specific zone
   Future<List<Cell>> loadCellsForZone(String zoneId) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     final maps = await db.query(
       'cells',
       where: 'zoneId = ? AND isActive = ?',
@@ -386,7 +386,7 @@ class StockEntryProvider with ChangeNotifier {
     int? capacity,
     String? description,
   }) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     
     // Check for duplicate cell code or name in warehouse
     final existing = await db.query(
@@ -426,7 +426,7 @@ class StockEntryProvider with ChangeNotifier {
     int? capacity,
     String? description,
   }) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     
     // Check for duplicate cell code or name in warehouse
     final existing = await db.query(
@@ -466,7 +466,7 @@ class StockEntryProvider with ChangeNotifier {
     int? capacity,
     String? description,
   }) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     
     await db.update(
       'cells',
@@ -485,7 +485,7 @@ class StockEntryProvider with ChangeNotifier {
 
   // Delete cell
   Future<void> deleteCell(String cellId) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     
     // Check if cell has stock
     final stocks = await db.query(
@@ -533,7 +533,7 @@ class StockEntryProvider with ChangeNotifier {
       throw Exception('Quantity must be greater than zero');
     }
 
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
 
     // Check if stock already exists at this location for this item
     final existing = await db.query(
@@ -571,17 +571,23 @@ class StockEntryProvider with ChangeNotifier {
     }
 
     // Record stock movement for tracking
+    final now = DateTime.now().toIso8601String();
     await db.insert('stock_movements', {
       'id': _uuid.v4(),
       'itemId': itemId,
+      'itemName': '',
+      'itemSku': '',
       'warehouseId': warehouseId,
-      'cellId': cellId,
+      'warehouseName': '',
       'movementType': 'IN',
-      'quantity': quantity,
-      'unitPrice': unitPrice,
+      'quantityBefore': 0,
+      'quantityChanged': quantity,
+      'quantityAfter': quantity,
       'batchNumber': batchNumber,
       'expiryDate': expiryDate?.toIso8601String(),
-      'createdAt': DateTime.now().toIso8601String(),
+      'performedBy': 'System',
+      'movementDate': now,
+      'createdAt': now,
       'notes': 'Stock entry via simplified location (cell)',
     });
 
@@ -605,7 +611,7 @@ class StockEntryProvider with ChangeNotifier {
       throw Exception('Quantity must be greater than zero');
     }
 
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
 
     // Check if stock already exists at this location for this item
     final existing = await db.query(
@@ -657,7 +663,7 @@ class StockEntryProvider with ChangeNotifier {
     required String shelfName,
     required String binName,
   }) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     
     // Check if the complete path exists
     final result = await db.rawQuery('''

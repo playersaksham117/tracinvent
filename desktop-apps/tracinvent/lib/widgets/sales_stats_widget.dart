@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
-import '../services/database_service.dart';
+import '../services/unified_database_manager.dart';
 
 /// Widget showing daily and monthly sales/purchase statistics
 class SalesStatsWidget extends StatefulWidget {
@@ -42,7 +42,7 @@ class _SalesStatsWidgetState extends State<SalesStatsWidget> {
   Future<void> _loadStats() async {
     setState(() => _isLoading = true);
     
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     final now = DateTime.now();
     final startOfToday = DateTime(now.year, now.month, now.day);
     final startOfMonth = DateTime(now.year, now.month, 1);
@@ -211,7 +211,7 @@ class _SalesStatsWidgetState extends State<SalesStatsWidget> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withOpacity(0.1),
+                  color: const Color(0xFF10B981).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(Icons.analytics, color: Color(0xFF10B981), size: 20),
@@ -345,9 +345,9 @@ class _SalesStatsWidgetState extends State<SalesStatsWidget> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.05),
+        color: color.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -615,7 +615,7 @@ class _SalesStatsWidgetState extends State<SalesStatsWidget> {
             ),
             belowBarData: BarAreaData(
               show: true,
-              color: const Color(0xFF10B981).withOpacity(0.1),
+              color: const Color(0xFF10B981).withValues(alpha: 0.1),
             ),
           ),
           // Sales line
@@ -640,7 +640,7 @@ class _SalesStatsWidgetState extends State<SalesStatsWidget> {
             ),
             belowBarData: BarAreaData(
               show: true,
-              color: const Color(0xFF3B82F6).withOpacity(0.1),
+              color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
             ),
           ),
         ],
@@ -668,7 +668,7 @@ class _CellStockOverviewWidgetState extends State<CellStockOverviewWidget> {
   }
 
   Future<void> _loadCellSummary() async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     
     final results = await db.rawQuery('''
       SELECT 
@@ -709,7 +709,7 @@ class _CellStockOverviewWidgetState extends State<CellStockOverviewWidget> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF8B5CF6).withOpacity(0.1),
+                  color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(Icons.grid_view, color: Color(0xFF8B5CF6), size: 20),
@@ -776,7 +776,7 @@ class _CellStockOverviewWidgetState extends State<CellStockOverviewWidget> {
                           Container(
                             padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF8B5CF6).withOpacity(0.1),
+                              color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: const Icon(

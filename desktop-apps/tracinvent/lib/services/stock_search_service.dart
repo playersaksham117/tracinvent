@@ -1,4 +1,4 @@
-import 'database_service.dart';
+import 'unified_database_manager.dart';
 
 class LocationStockDetail {
   final String stockId;
@@ -135,7 +135,7 @@ class StockSearchService {
   /// GLOBAL SEARCH: Find items by SKU, Name, or Barcode
   /// Returns items with all their locations and quantities
   static Future<List<StockSearchResult>> globalSearch(String query) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     final searchTerm = '%$query%';
 
     try {
@@ -193,7 +193,7 @@ class StockSearchService {
 
   /// SEARCH BY SKU ONLY (Fast exact match)
   static Future<StockSearchResult?> searchBySku(String sku) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
 
     try {
       final results = await db.rawQuery('''
@@ -242,7 +242,7 @@ class StockSearchService {
 
   /// SEARCH BY BARCODE (Fast exact match)
   static Future<StockSearchResult?> searchByBarcode(String barcode) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
 
     try {
       final results = await db.rawQuery('''
@@ -291,7 +291,7 @@ class StockSearchService {
 
   /// Get all locations where an item is stored with quantities
   static Future<List<LocationStockDetail>> _getItemLocations(String itemId) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
 
     try {
       final results = await db.rawQuery('''
@@ -328,7 +328,7 @@ class StockSearchService {
     String? shelfId,
     String? binId,
   }) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
 
     try {
       String query = 'SELECT SUM(quantity) as total FROM stocks WHERE itemId = ? AND warehouseId = ?';
@@ -360,7 +360,7 @@ class StockSearchService {
 
   /// Get stock summary by warehouse for an item
   static Future<List<Map<String, dynamic>>> getItemStockByWarehouse(String itemId) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
 
     try {
       return await db.rawQuery('''
@@ -385,7 +385,7 @@ class StockSearchService {
     String itemId, {
     int limit = 10,
   }) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
 
     try {
       return await db.rawQuery('''
@@ -411,7 +411,7 @@ class StockSearchService {
 
   /// Find out-of-stock locations for an item
   static Future<List<Map<String, dynamic>>> getOutOfStockLocations() async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
 
     try {
       return await db.rawQuery('''
@@ -441,7 +441,7 @@ class StockSearchService {
     bool? isLowStock,
     bool? isCritical,
   }) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
     String query = '''
       SELECT DISTINCT
         ii.id,
@@ -531,7 +531,7 @@ class StockSearchService {
     required double adjustment,
     String reason = 'Manual adjustment',
   }) async {
-    final db = await DatabaseService.database;
+    final db = await DatabaseManager.instance.database;
 
     try {
       // Get current stock
