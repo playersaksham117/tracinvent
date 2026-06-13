@@ -167,7 +167,7 @@ class _PosBillingScreenState extends State<PosBillingScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               DropdownButtonFormField<String>(
-                value: pos.warehouseId,
+                initialValue: pos.warehouseId,
                 decoration: const InputDecoration(labelText: 'Warehouse'),
                 items: wh.warehouses
                     .map((w) => DropdownMenuItem(value: w.id, child: Text(w.name)))
@@ -176,7 +176,7 @@ class _PosBillingScreenState extends State<PosBillingScreen> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: pos.paymentMode,
+                initialValue: pos.paymentMode,
                 decoration: const InputDecoration(labelText: 'Payment Mode'),
                 items: const [
                   DropdownMenuItem(value: 'cash', child: Text('Cash')),
@@ -189,7 +189,7 @@ class _PosBillingScreenState extends State<PosBillingScreen> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: pos.selectedCustomer?.id,
+                initialValue: pos.selectedCustomer?.id,
                 decoration: const InputDecoration(labelText: 'Customer (optional)'),
                 items: [
                   const DropdownMenuItem(value: null, child: Text('Walk-in Customer')),

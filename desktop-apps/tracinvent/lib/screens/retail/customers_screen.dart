@@ -102,7 +102,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 TextField(controller: email, decoration: const InputDecoration(labelText: 'Email')),
                 TextField(controller: gstin, decoration: const InputDecoration(labelText: 'GSTIN')),
                 DropdownButtonFormField<String>(
-                  value: customerType,
+                  initialValue: customerType,
                   items: const [
                     DropdownMenuItem(value: 'retail', child: Text('Retail')),
                     DropdownMenuItem(value: 'wholesale', child: Text('Wholesale')),

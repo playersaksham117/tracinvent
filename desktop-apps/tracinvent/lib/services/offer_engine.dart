@@ -38,7 +38,7 @@ class OfferEngine {
         final percent = (config['percent'] as num?)?.toDouble() ?? 0;
         final d = cart.fold(0.0, (s, i) => s + i.lineSubtotal) * percent / 100;
         discount += d;
-        applied.add('${offer['name']}: ${percent}% off');
+        applied.add('${offer['name']}: $percent% off');
       } else if (type == 'buy_x_get_y') {
         final buyQty = (config['buyQty'] as num?)?.toInt() ?? 2;
         final freeQty = (config['freeQty'] as num?)?.toInt() ?? 1;
@@ -64,7 +64,7 @@ class OfferEngine {
         if (now.hour >= startHour && now.hour <= endHour) {
           final percent = (config['percent'] as num?)?.toDouble() ?? 0;
           discount += cart.fold(0.0, (s, i) => s + i.lineSubtotal) * percent / 100;
-          applied.add('${offer['name']}: happy hours ${percent}%');
+          applied.add('${offer['name']}: happy hours $percent%');
         }
       }
     }

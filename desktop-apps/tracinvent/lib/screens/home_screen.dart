@@ -6,6 +6,7 @@ import '../providers/sync_provider.dart';
 import '../providers/navigation_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/license_provider.dart';
+import 'user_management_screen.dart';
 import 'dashboard_screen.dart';
 import 'inventory_screen.dart';
 import 'warehouses_screen.dart';
@@ -130,158 +131,114 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 // Navigation Items
                 Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 16),
-                    children: [
-                      _buildNavItem(
-                        context,
-                        0,
-                        Icons.dashboard_outlined,
-                        Icons.dashboard,
-                        'Dashboard',
-                      ),
-                      _buildNavItem(
-                        context,
-                        1,
-                        Icons.inventory_outlined,
-                        Icons.inventory,
-                        'Inventory',
-                      ),
-                      const SizedBox(height: 8),
-                      Padding(
+                  child: Consumer<AuthProvider>(
+                    builder: (context, auth, _) {
+                      return ListView(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        child: Text(
-                          'STOCK TRACKING',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey.shade500,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ),
-                      _buildNavItem(
-                        context,
-                        3,
-                        Icons.location_on_outlined,
-                        Icons.location_on,
-                        'Stock Locations',
-                      ),
-                      _buildNavItem(
-                        context,
-                        4,
-                        Icons.grid_view_outlined,
-                        Icons.grid_view,
-                        'Cell Stock View',
-                      ),
-                      _buildNavItem(
-                        context,
-                        5,
-                        Icons.calendar_today_outlined,
-                        Icons.calendar_today,
-                        'Daily Log',
-                      ),
-                      const SizedBox(height: 8),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        child: Text(
-                          'ADJUSTMENTS',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey.shade500,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ),
-                      _buildNavItem(
-                        context,
-                        6,
-                        Icons.tune_outlined,
-                        Icons.tune,
-                        'Adjustments & Batches',
-                      ),
-                      const SizedBox(height: 8),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        child: Text(
-                          'MANAGEMENT',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey.shade500,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ),
-                      _buildNavItem(
-                        context,
-                        7,
-                        Icons.warehouse_outlined,
-                        Icons.warehouse,
-                        'Warehouses',
-                      ),
-                      _buildNavItem(
-                        context,
-                        8,
-                        Icons.add_shopping_cart_outlined,
-                        Icons.add_shopping_cart,
-                        'Stock In/Out',
-                      ),
-                      _buildNavItem(
-                        context,
-                        9,
-                        Icons.assessment_outlined,
-                        Icons.assessment,
-                        'Reports',
-                      ),
-                      const SizedBox(height: 8),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        child: Text(
-                          'TOOLS',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey.shade500,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ),
-                      _buildNavItem(
-                        context,
-                        11,
-                        Icons.qr_code_scanner_outlined,
-                        Icons.qr_code_2,
-                        'QR/Barcode Scanner',
-                      ),
-                      const SizedBox(height: 8),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        child: Text(
-                          'SYSTEM',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey.shade500,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ),
-                      _buildNavItem(
-                        context,
-                        10,
-                        Icons.settings_outlined,
-                        Icons.settings,
-                        'Settings',
-                      ),
-                    ],
+                            horizontal: 12, vertical: 16),
+                        children: [
+                          // ── Always visible ──────────────────────────────
+                          _buildNavItem(context, 0,
+                              Icons.dashboard_outlined, Icons.dashboard,
+                              'Dashboard'),
+                          _buildNavItem(context, 1,
+                              Icons.inventory_outlined, Icons.inventory,
+                              'Inventory'),
+
+                          // ── STOCK TRACKING (staff+) ─────────────────────
+                          if (auth.isStaff) ...[
+                            const SizedBox(height: 8),
+                            _sectionLabel('STOCK TRACKING'),
+                            _buildNavItem(context, 3,
+                                Icons.location_on_outlined, Icons.location_on,
+                                'Stock Locations'),
+                            _buildNavItem(context, 4,
+                                Icons.grid_view_outlined, Icons.grid_view,
+                                'Cell Stock View'),
+                            _buildNavItem(context, 5,
+                                Icons.calendar_today_outlined, Icons.calendar_today,
+                                'Daily Log'),
+                          ],
+
+                          // ── ADJUSTMENTS (staff+) ────────────────────────
+                          if (auth.isStaff) ...[
+                            const SizedBox(height: 8),
+                            _sectionLabel('ADJUSTMENTS'),
+                            _buildNavItem(context, 6,
+                                Icons.tune_outlined, Icons.tune,
+                                'Adjustments & Batches'),
+                          ],
+
+                          // ── MANAGEMENT (manager+) ───────────────────────
+                          if (auth.isManager) ...[
+                            const SizedBox(height: 8),
+                            _sectionLabel('MANAGEMENT'),
+                            _buildNavItem(context, 7,
+                                Icons.warehouse_outlined, Icons.warehouse,
+                                'Warehouses'),
+                            _buildNavItem(context, 8,
+                                Icons.add_shopping_cart_outlined,
+                                Icons.add_shopping_cart, 'Stock In/Out'),
+                            _buildNavItem(context, 9,
+                                Icons.assessment_outlined, Icons.assessment,
+                                'Reports'),
+                          ],
+
+                          // ── TOOLS (staff+) ──────────────────────────────
+                          if (auth.isStaff) ...[
+                            const SizedBox(height: 8),
+                            _sectionLabel('TOOLS'),
+                            _buildNavItem(context, 11,
+                                Icons.qr_code_scanner_outlined, Icons.qr_code_2,
+                                'QR/Barcode Scanner'),
+                          ],
+
+                          // ── SYSTEM (admin only) ─────────────────────────
+                          if (auth.isAdmin) ...[
+                            const SizedBox(height: 8),
+                            _sectionLabel('SYSTEM'),
+                            _buildNavItem(context, 10,
+                                Icons.settings_outlined, Icons.settings,
+                                'Settings'),
+                            // User Management inline button
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () {
+                                    Navigator.of(context).push(MaterialPageRoute(
+                                      builder: (_) => const UserManagementScreen(),
+                                    ));
+                                  },
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Row(
+                                      children: [
+                                        Icon(Icons.manage_accounts_outlined,
+                                            color: Color(0xFF64748B),
+                                            size: 22),
+                                        SizedBox(width: 12),
+                                        Text('User Management',
+                                            style: TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w500,
+                                                color: Color(0xFF475569))),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      );
+                    },
                   ),
                 ),
 
@@ -378,8 +335,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       // User Profile
                       Consumer<AuthProvider>(
                         builder: (context, auth, _) {
-                          final name = auth.currentUser?['name'] ?? 'User';
-                          final email = auth.currentUser?['email'] ?? '';
+                          final name    = auth.currentUser?['name']  ?? 'User';
+                          final role    = auth.userRole;
                           final initial = name.isNotEmpty
                               ? name.substring(0, 1).toUpperCase()
                               : 'U';
@@ -390,35 +347,28 @@ class _HomeScreenState extends State<HomeScreen> {
                                 radius: 20,
                                 backgroundColor:
                                     const Color(0xFF2563EB).withValues(alpha: 0.1),
-                                child: Text(
-                                  initial,
-                                  style: const TextStyle(
-                                    color: Color(0xFF2563EB),
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
+                                child: Text(initial,
+                                    style: const TextStyle(
+                                        color: Color(0xFF2563EB),
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w600)),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    Text(name,
+                                        style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF0F172A)),
+                                        overflow: TextOverflow.ellipsis),
                                     Text(
-                                      name,
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: Color(0xFF0F172A),
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    Text(
-                                      email,
+                                      _roleLabel(role),
                                       style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.grey.shade600,
-                                      ),
+                                          fontSize: 11,
+                                          color: _roleColor(role)),
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ],
@@ -426,14 +376,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               IconButton(
                                 tooltip: 'Sign out',
-                                icon: Icon(
-                                  Icons.logout,
-                                  size: 18,
-                                  color: Colors.grey.shade600,
-                                ),
-                                onPressed: () async {
-                                  await auth.logout();
-                                },
+                                icon: Icon(Icons.logout, size: 18,
+                                    color: Colors.grey.shade600),
+                                onPressed: () async { await auth.logout(); },
                               ),
                             ],
                           );
@@ -451,6 +396,40 @@ class _HomeScreenState extends State<HomeScreen> {
             child: _screens[selectedIndex],
           ),
         ],
+      ),
+    );
+  }
+
+  String _roleLabel(String role) {
+    const map = {
+      'admin':   'Administrator',
+      'manager': 'Manager',
+      'staff':   'Staff',
+      'viewer':  'Viewer',
+    };
+    return map[role] ?? role;
+  }
+
+  Color _roleColor(String role) {
+    switch (role) {
+      case 'admin':   return const Color(0xFF2563EB);
+      case 'manager': return const Color(0xFF7C3AED);
+      case 'staff':   return const Color(0xFF059669);
+      default:        return const Color(0xFF6B7280);
+    }
+  }
+
+  Widget _sectionLabel(String label) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: Colors.grey.shade500,
+          letterSpacing: 0.5,
+        ),
       ),
     );
   }

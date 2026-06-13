@@ -132,7 +132,7 @@ class _LedgerScreenState extends State<LedgerScreen> with SingleTickerProviderSt
                         TextField(controller: amount, decoration: const InputDecoration(labelText: 'Amount'), keyboardType: TextInputType.number),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<String>(
-                          value: mode,
+                          initialValue: mode,
                           decoration: const InputDecoration(labelText: 'Payment Mode'),
                           items: const [
                             DropdownMenuItem(value: 'cash', child: Text('Cash')),

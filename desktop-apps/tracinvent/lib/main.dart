@@ -149,10 +149,10 @@ class TracInventApp extends StatelessWidget {
             ),
           ),
         ),
-        home: AuthGate(
+        home: const AuthGate(
           child: LicenseGate(
             child: _AppInitializer(
-              child: const HomeScreen(),
+              child: HomeScreen(),
             ),
           ),
         ),
