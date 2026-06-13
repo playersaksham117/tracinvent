@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:billease_pos/theme/app_theme.dart';
 import 'package:billease_pos/screens/dashboard_screen.dart';
 import 'package:billease_pos/screens/billing_screen.dart';
@@ -10,6 +13,11 @@ import 'package:billease_pos/screens/settings_screen.dart';
 import 'package:billease_pos/screens/data_import_export_screen.dart';
 
 void main() {
+  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
+
   runApp(const BillEasePOSMobileApp());
 }
 

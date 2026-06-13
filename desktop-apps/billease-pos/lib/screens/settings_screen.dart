@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/receipt_generator.dart';
 import '../database/database_helper.dart';
+import '../services/github_update_service.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
@@ -65,8 +66,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool allowNegativeStockSales = false;
   
   bool _hasUnsavedChanges = false;
-  String updateInstallerUrl = '';
   bool _isUpdating = false;
+  bool _isCheckingUpdate = false;
+  double _updateDownloadProgress = 0.0;
+  String _updateStatusText = '';
+  GitHubRelease? _availableUpdate;
+  DateTime? _lastUpdateCheck;
 
   @override
   void initState() {
@@ -113,7 +118,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       labelShowName = prefs.getBool('label_show_name') ?? true;
       labelShowMrp = prefs.getBool('label_show_mrp') ?? false;
       labelShowShopName = prefs.getBool('label_show_shop_name') ?? false;
-      updateInstallerUrl = prefs.getString('update_installer_url') ?? '';
     });
   }
 
@@ -168,7 +172,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.setBool('label_show_name', labelShowName);
     await prefs.setBool('label_show_mrp', labelShowMrp);
     await prefs.setBool('label_show_shop_name', labelShowShopName);
-    await prefs.setString('update_installer_url', updateInstallerUrl.trim());
     
     setState(() => _hasUnsavedChanges = false);
     
@@ -2191,42 +2194,103 @@ class _SettingsScreenState extends State<SettingsScreen> {
           icon: Icons.system_update_alt_rounded,
           children: [
             const Text(
-              'Download the latest installer and start update automatically. Database files are not modified by this action.',
+              'Check GitHub for the latest release, download the installer, and apply the update automatically. Your database is preserved.',
               style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
             ),
             const SizedBox(height: 12),
-            TextFormField(
-              initialValue: updateInstallerUrl,
-              decoration: const InputDecoration(
-                labelText: 'Installer URL',
-                hintText: 'https://.../setup.exe',
-                border: OutlineInputBorder(),
-              ),
-              onChanged: (v) {
-                updateInstallerUrl = v;
-                _markChanged();
-              },
+            Row(
+              children: [
+                const Text('Current version', style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
+                const SizedBox(width: 8),
+                Text(
+                  GitHubUpdateService.versionString,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                if (_availableUpdate != null) ...[
+                  const SizedBox(width: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFDCFCE7),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      'Update: ${_availableUpdate!.tagName}',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF166534)),
+                    ),
+                  ),
+                ],
+              ],
             ),
+            if (_lastUpdateCheck != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Last checked: ${_formatUpdateCheckTime(_lastUpdateCheck!)}',
+                style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+              ),
+            ],
+            if (_isUpdating) ...[
+              const SizedBox(height: 12),
+              LinearProgressIndicator(
+                value: _updateDownloadProgress > 0 ? _updateDownloadProgress : null,
+                backgroundColor: const Color(0xFFE2E8F0),
+                valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
+              ),
+              if (_updateStatusText.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _updateStatusText,
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                ),
+              ],
+            ],
             const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _isUpdating ? null : _downloadAndInstallUpdate,
-                icon: _isUpdating
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Icons.download_for_offline_rounded),
-                label: Text(_isUpdating ? 'Downloading Update...' : 'Download & Install Update'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: (_isUpdating || _isCheckingUpdate) ? null : _checkForUpdates,
+                    icon: _isCheckingUpdate
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh_rounded),
+                    label: Text(_isCheckingUpdate ? 'Checking...' : 'Check for Updates'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: (_isUpdating || _isCheckingUpdate || !Platform.isWindows)
+                        ? null
+                        : _downloadAndInstallUpdate,
+                    icon: _isUpdating
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.download_for_offline_rounded),
+                    label: Text(_isUpdating ? 'Updating...' : 'Download & Install'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2563EB),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (!Platform.isWindows)
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text(
+                  'In-app auto-install is available on Windows desktop builds.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
                 ),
               ),
-            ),
           ],
         ),
         const SizedBox(height: 20),
@@ -2271,56 +2335,146 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Future<void> _downloadAndInstallUpdate() async {
-    final url = updateInstallerUrl.trim();
-    if (url.isEmpty) {
+  String _formatUpdateCheckTime(DateTime time) {
+    final local = time.toLocal();
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+    return '${local.day}/${local.month}/${local.year} $hour:$minute';
+  }
+
+  Future<void> _checkForUpdates({bool showUpToDateMessage = true}) async {
+    setState(() {
+      _isCheckingUpdate = true;
+      _updateStatusText = 'Checking GitHub releases...';
+    });
+
+    try {
+      final release = await GitHubUpdateService.checkForUpdates();
+      if (!mounted) return;
+
+      setState(() {
+        _availableUpdate = release;
+        _lastUpdateCheck = DateTime.now();
+        _updateStatusText = release == null ? 'You are on the latest version.' : '';
+      });
+
+      if (showUpToDateMessage) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              release == null
+                  ? 'BillEase POS is up to date (${GitHubUpdateService.versionString}).'
+                  : 'Update available: ${release.tagName}',
+            ),
+            backgroundColor: release == null ? const Color(0xFF16A34A) : const Color(0xFF2563EB),
+          ),
+        );
+      }
+
+      return;
+    } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please set installer URL first'), backgroundColor: Colors.orange),
+        SnackBar(content: Text('Update check failed: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isCheckingUpdate = false);
+      }
+    }
+  }
+
+  Future<void> _downloadAndInstallUpdate() async {
+    if (!Platform.isWindows) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Auto-install is supported on Windows desktop only.'),
+          backgroundColor: Colors.orange,
+        ),
       );
       return;
     }
 
-    setState(() => _isUpdating = true);
-    try {
-      final uri = Uri.parse(url);
-      final tempDir = await getTemporaryDirectory();
-      final fileName = p.basename(uri.path).isEmpty ? 'billease_update_installer.exe' : p.basename(uri.path);
-      final installerFile = File(p.join(tempDir.path, fileName));
+    setState(() {
+      _isUpdating = true;
+      _updateDownloadProgress = 0;
+      _updateStatusText = 'Checking for updates...';
+    });
 
-      final client = HttpClient();
-      final request = await client.getUrl(uri);
-      final response = await request.close();
-      if (response.statusCode != 200) {
-        throw Exception('Download failed (${response.statusCode})');
+    try {
+      var release = _availableUpdate;
+      release ??= await GitHubUpdateService.checkForUpdates();
+      _lastUpdateCheck = DateTime.now();
+
+      if (release == null) {
+        if (!mounted) return;
+        setState(() {
+          _availableUpdate = null;
+          _updateStatusText = 'Already on the latest version.';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No update found (${GitHubUpdateService.versionString}).'),
+            backgroundColor: const Color(0xFF16A34A),
+          ),
+        );
+        return;
       }
 
-      final sink = installerFile.openWrite();
-      await response.forEach(sink.add);
-      await sink.close();
-
-      if (Platform.isWindows) {
-        await Process.start(installerFile.path, [], mode: ProcessStartMode.detached);
-      } else if (Platform.isMacOS) {
-        await Process.start('open', [installerFile.path], mode: ProcessStartMode.detached);
-      } else if (Platform.isLinux) {
-        await Process.start('xdg-open', [installerFile.path], mode: ProcessStartMode.detached);
+      final asset = release.windowsAsset;
+      if (asset == null) {
+        throw Exception('No Windows installer found in ${release.tagName}');
       }
 
       if (!mounted) return;
+      setState(() {
+        _availableUpdate = release;
+        _updateStatusText = 'Downloading ${asset.name} (${asset.formattedSize})...';
+      });
+
+      final installerPath = await GitHubUpdateService.downloadUpdate(
+        asset,
+        (received, total) {
+          if (!mounted) return;
+          setState(() {
+            _updateDownloadProgress = total > 0 ? received / total : 0;
+            _updateStatusText =
+                'Downloading ${GitHubUpdateService.formatBytes(received)} / ${GitHubUpdateService.formatBytes(total)}';
+          });
+        },
+      );
+
+      if (installerPath == null) {
+        throw Exception('Download failed');
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _updateStatusText = 'Starting installer...';
+        _updateDownloadProgress = 1;
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Installer started. Database remains untouched.'),
+          content: Text('Installing update. The app will close and restart.'),
           backgroundColor: Color(0xFF16A34A),
         ),
       );
+
+      await GitHubUpdateService.installUpdate(installerPath);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Update failed: $e'), backgroundColor: Colors.red),
       );
     } finally {
-      if (mounted) setState(() => _isUpdating = false);
+      if (mounted) {
+        setState(() {
+          _isUpdating = false;
+          _updateDownloadProgress = 0;
+        });
+      }
     }
   }
 
